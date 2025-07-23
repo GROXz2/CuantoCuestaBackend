@@ -1,0 +1,18 @@
+api key: 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
+pip install openai
+// Codigo para llamar el api key
+from openai import OpenAI
+
+client = OpenAI(
+  api_key="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"
+)
+
+completion = client.chat.completions.create(
+  model="gpt-4o-mini",
+  store=True,
+  messages=[
+    {"role": "user", "content": "write a haiku about ai"}
+  ]
+)
+
+print(completion.choices[0].message);

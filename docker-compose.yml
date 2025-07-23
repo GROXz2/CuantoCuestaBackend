@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL con PostGIS
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: cuanto_cuesta_db
+    environment:
+      POSTGRES_DB: DealFinder
+      POSTGRES_USER: dealfinder_user
+      POSTGRES_PASSWORD: dealfinder_2024_secure
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/sql:/docker-entrypoint-initdb.d
+    networks:
+      - cuanto_cuesta_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dealfinder_user -d DealFinder"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Cache Redis
+  redis:
+    image: redis:7-alpine
+    container_name: cuanto_cuesta_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cuanto_cuesta_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Backend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cuanto_cuesta_api
+    environment:
+      - DATABASE_URL=postgresql://dealfinder_user:dealfinder_2024_secure@postgres:5432/DealFinder
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - cuanto_cuesta_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Adminer para gestión de BD (opcional)
+  adminer:
+    image: adminer:latest
+    container_name: cuanto_cuesta_adminer
+    ports:
+      - "8080:8080"
+    networks:
+      - cuanto_cuesta_network
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  cuanto_cuesta_network:
+    driver: bridge
+
