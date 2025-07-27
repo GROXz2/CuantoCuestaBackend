@@ -1,0 +1,38 @@
+# Entornos virtuales
+venv/
+.env
+.env.*
+
+# Archivos de sistema
+__pycache__/
+*.py[cod]
+*.log
+.DS_Store
+
+# Dependencias (si se generaran por error)
+*.egg-info/
+.eggs/
+
+# Archivos de tests
+.coverage
+htmlcov/
+.cache/
+.tox/
+pytest_cache/
+
+# Archivos de configuración del editor
+.vscode/
+.idea/
+
+# Carpeta de compilación o dist
+dist/
+build/
+
+# Base de datos local (si usas SQLite)
+*.db
+*.sqlite3
+
+# Exportaciones o datos temporales
+*.zip
+*.bak
+*.dump
