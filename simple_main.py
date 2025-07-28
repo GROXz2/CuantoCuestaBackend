@@ -5,6 +5,8 @@ from typing import List, Optional
 from pydantic import BaseModel
 import re
 import unicodedata
+from db import SessionLocal
+from openai_client import consulta_gpt
 
 app = FastAPI(
     title="Cuanto Cuesta API - Completa",
