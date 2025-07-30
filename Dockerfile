@@ -1,23 +1,26 @@
+# Imagen base con Python 3.11
 FROM python:3.11-slim
 
+# Instalar dependencias necesarias
 RUN apt-get update && apt-get install -y \
     gcc \
-    g++ \
     libpq-dev \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Directorio de trabajo
 WORKDIR /app
 
+# Copiar dependencias primero
 COPY requirements.txt .
+
+# Instalar dependencias
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copiar el resto del código
 COPY . .
 
-RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app
-USER app
-
+# Exponer el puerto que Render necesita
 EXPOSE 10000
 
+# Comando para iniciar la app
 CMD ["uvicorn", "simple_main:app", "--host", "0.0.0.0", "--port", "10000"]
