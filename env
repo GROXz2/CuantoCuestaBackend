@@ -1,4 +1,0 @@
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-DB_URI=postgresql://postgres:LeonJuancho2017!@db.zrturgbbehgnjnvjqgyw.supabase.co:5432/postgres
-ENVIRONMENT=development
-PORT=10000
