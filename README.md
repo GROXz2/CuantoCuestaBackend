@@ -4,7 +4,9 @@ Backend para optmizar cuentas con chatgpt.
 ## Configuración
 
 Copia el archivo `.env` y ajusta las variables necesarias. La aplicación
-requiere al menos `OPENAI_API_KEY` y `DATABASE_URL`.
+requiere al menos `OPENAI_API_KEY` y `DATABASE_URL`. Si tu contraseña de base de
+datos contiene caracteres especiales (por ejemplo `!`), pon el valor entre
+comillas o codifica esos caracteres (`!` → `%21`).
 
 La versión completa de la API se ejecuta desde `app/main.py`. Se incluye un
 ejemplo más simple en `examples/simple_main.py` solo para pruebas locales.
