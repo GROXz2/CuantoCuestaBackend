@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Cuanto Cuesta API"
     PROJECT_VERSION: str = "1.0.0"
     DEBUG: bool = True
+    BASE_URL: str | None = None
     
     # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = 100
