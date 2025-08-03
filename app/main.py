@@ -225,6 +225,9 @@ def custom_openapi():
         description=app.description,
         routes=app.routes,
     )
+
+    base_url = settings.BASE_URL or "https://cuantocuestabackend.onrender.com"
+    openapi_schema["servers"] = [{"url": base_url}]
     
     # Personalizar información adicional
     openapi_schema["info"]["x-logo"] = {
