@@ -1,8 +1,10 @@
-"""
-Servicio de precios con comparación y análisis
-"""
+"""Servicio de precios con comparación y análisis"""
 from typing import List, Optional, Dict, Any
 from uuid import UUID
+from datetime import datetime, timedelta
+import json
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.repositories.price_repository import price_repository
@@ -10,6 +12,9 @@ from app.services.product_service import product_service
 from app.services.store_service import store_service
 from app.core.cache import cache, cache_price_key
 from app.core.config import settings
+from openai_client import consulta_gpt
+
+logger = logging.getLogger(__name__)
 
 
 class PriceService:
@@ -20,6 +25,53 @@ class PriceService:
         self.product_service = product_service
         self.store_service = store_service
         self.cache = cache
+
+    def needs_rescrape(self, db: Session, product_id: UUID) -> bool:
+        """Verifica si un producto requiere re-scraping y lo ejecuta si es necesario."""
+        prices = self.price_repo.get_current_prices_for_product(db, product_id)
+        latest_scraped = None
+        if prices:
+            scraped_dates = [p.get("scraped_at") for p in prices if p.get("scraped_at")]
+            if scraped_dates:
+                latest_scraped = max(scraped_dates)
+
+        if latest_scraped and datetime.utcnow() - latest_scraped < timedelta(hours=24):
+            logger.info("Producto %s actualizado recientemente (%s)", product_id, latest_scraped)
+            return False
+
+        logger.info("Re-scrape necesario para producto %s", product_id)
+        try:
+            prompt = (
+                "Devuelve un JSON con los campos store_id, normal_price, discount_price, "
+                "discount_percentage, stock_status y promotion_description para el producto "
+                f"{product_id}"
+            )
+            gpt_response = consulta_gpt(prompt)
+            logger.debug("Respuesta de GPT para %s: %s", product_id, gpt_response)
+            data = json.loads(gpt_response)
+        except Exception as exc:
+            logger.error("Error al obtener datos desde GPT para %s: %s", product_id, exc)
+            return False
+
+        try:
+            price_data = {
+                "product_id": product_id,
+                "store_id": data.get("store_id"),
+                "normal_price": data.get("normal_price"),
+                "discount_price": data.get("discount_price"),
+                "discount_percentage": data.get("discount_percentage"),
+                "stock_status": data.get("stock_status", "available"),
+                "promotion_description": data.get("promotion_description"),
+                "scraped_at": datetime.utcnow(),
+            }
+            self.price_repo.create(db, obj_in=price_data)
+            logger.info("Precio actualizado y persistido para producto %s", product_id)
+            return True
+        except Exception as exc:
+            logger.error(
+                "Error al persistir datos de precio para %s: %s", product_id, exc
+            )
+            return False
     
     def compare_prices(
         self,
