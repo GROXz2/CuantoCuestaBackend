@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """Configuración de la aplicación"""
     
     # Database
-    DATABASE_URL: str = "postgresql://postgres:Leon2017@localhost:5432/DealFinder"
+    DATABASE_URL: str
     
     # Redis Cache
     REDIS_URL: str = "redis://localhost:6379/0"
