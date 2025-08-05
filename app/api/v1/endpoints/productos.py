@@ -81,7 +81,15 @@ async def buscar_productos(
             limite=limite,
             skip=skip
         )
-        
+
+        # Sugerir marca alternativa cuando no hay stock disponible
+        for prod in result.get("productos", []):
+            if prod.get("tiendas_disponibles", 0) == 0:
+                alternativa = product_service.get_alternative_brand(db, UUID(prod["id"]))
+                if alternativa:
+                    prod["marca_sugerida"] = alternativa
+                    prod["explicacion"] = f"Producto sin stock disponible. Se sugiere marca {alternativa}."
+
         # Agregar tiempo de respuesta
         end_time = time.time()
         result["tiempo_respuesta_ms"] = int((end_time - start_time) * 1000)

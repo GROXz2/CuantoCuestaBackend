@@ -166,8 +166,31 @@ class ProductService:
         
         # Guardar en cache
         self.cache.set(cache_key, product_data, settings.CACHE_TTL_PRODUCTS)
-        
+
         return product_data
+
+    def get_alternative_brand(
+        self,
+        db: Session,
+        product_id: UUID
+    ) -> Optional[str]:
+        """Buscar una marca alternativa dentro de la misma categoría"""
+        # Obtener información del producto original
+        product = self.product_repo.get_active(db, product_id)
+        if not product or not product.category_id:
+            return None
+
+        # Buscar otros productos de la misma categoría
+        alternatives = self.product_repo.get_by_category(db, product.category_id)
+        for alt in alternatives:
+            if alt.id == product.id or alt.brand == product.brand:
+                continue
+
+            # Verificar que la marca alternativa tenga stock disponible
+            if self.price_repo.get_current_prices_for_product(db, alt.id):
+                return alt.brand
+
+        return None
     
     def get_popular_products(
         self,

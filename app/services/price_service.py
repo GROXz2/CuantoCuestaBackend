@@ -52,7 +52,37 @@ class PriceService:
         comparison_data = self.price_repo.get_price_comparison(
             db, product_id, lat, lon, radio_km, incluir_mayoristas
         )
-        
+
+        # Manejar caso sin precios disponibles
+        if not comparison_data["prices"]:
+            result = {
+                "producto": {
+                    "id": str(product_id),
+                    "nombre": product_info["nombre"],
+                    "marca": product_info["marca"],
+                    "categoria": product_info["categoria"]["nombre"] if product_info["categoria"] else None,
+                    "nombre_completo": product_info["nombre_completo"]
+                },
+                "precios": [],
+                "estadisticas": {
+                    "total_tiendas": 0,
+                    "precio_minimo": 0,
+                    "precio_maximo": 0,
+                    "precio_promedio": 0,
+                    "ahorro_maximo": 0,
+                    "ofertas_con_descuento": 0
+                },
+                "recomendacion": "Sin stock disponible",
+                "ahorro_maximo": 0,
+                "filtros_aplicados": {
+                    "ubicacion": {"lat": lat, "lon": lon} if lat and lon else None,
+                    "radio_km": radio_km,
+                    "incluir_mayoristas": incluir_mayoristas
+                }
+            }
+            self.cache.set(cache_key, result, settings.CACHE_TTL_PRICES)
+            return result
+
         # Formatear respuesta
         formatted_prices = []
         for price_data in comparison_data["prices"]:
@@ -108,6 +138,7 @@ class PriceService:
                 "ofertas_con_descuento": comparison_data["statistics"]["discounted_offers"]
             },
             "recomendacion": recommendation,
+            "ahorro_maximo": comparison_data["statistics"]["max_savings"],
             "filtros_aplicados": {
                 "ubicacion": {"lat": lat, "lon": lon} if lat and lon else None,
                 "radio_km": radio_km,
