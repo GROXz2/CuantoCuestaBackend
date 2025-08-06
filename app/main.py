@@ -1,44 +1,45 @@
 """
 Aplicación principal FastAPI para Cuanto Cuesta
 """
-import time
 import logging
+import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
-import uvicorn
+from fastapi.responses import JSONResponse
 
-from app.core.config import settings
-from app.core.database import check_database_connection, create_database
-from app.core.cache import cache
 from app.api.v1.api import api_router
+from app.api.v1.routers.health import router as health_router
+from app.core.config import settings
+
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+except Exception:  # pragma: no cover - opcional si no está instalado
+    Instrumentator = None
 
 # Configurar logging
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-# Variable global para tiempo de inicio
-start_time = time.time()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
     logger.info("Iniciando aplicación Cuanto Cuesta...")
-    
+
     # Verificar conexión a base de datos (desactivado temporalmente)
     # if not await verify_database_connection():
     #     logger.error("No se pudo conectar a la base de datos")
     #     raise Exception("Error de conexión a base de datos")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Cerrando aplicación...")
 
@@ -93,7 +94,7 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Configurar CORS
@@ -107,10 +108,7 @@ app.add_middleware(
 
 # Middleware de hosts confiables
 if not settings.DEBUG:
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=settings.ALLOWED_HOSTS
-    )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
 
 # Middleware personalizado para logging y métricas
@@ -118,26 +116,26 @@ if not settings.DEBUG:
 async def log_requests(request: Request, call_next):
     """Middleware para logging de requests"""
     start_time_req = time.time()
-    
+
     # Log del request
     logger.info(f"Request: {request.method} {request.url}")
-    
+
     # Procesar request
     response = await call_next(request)
-    
+
     # Calcular tiempo de procesamiento
     process_time = time.time() - start_time_req
-    
+
     # Log de la respuesta
     logger.info(
         f"Response: {response.status_code} - "
         f"Time: {process_time:.3f}s - "
         f"Path: {request.url.path}"
     )
-    
+
     # Agregar header con tiempo de procesamiento
     response.headers["X-Process-Time"] = str(process_time)
-    
+
     return response
 
 
@@ -152,10 +150,10 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "error": {
                 "code": exc.status_code,
                 "message": exc.detail,
-                "path": str(request.url.path)
+                "path": str(request.url.path),
             },
-            "timestamp": time.time()
-        }
+            "timestamp": time.time(),
+        },
     )
 
 
@@ -163,7 +161,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 async def general_exception_handler(request: Request, exc: Exception):
     """Manejador de errores generales"""
     logger.error(f"Error no manejado: {exc}", exc_info=True)
-    
+
     return JSONResponse(
         status_code=500,
         content={
@@ -171,46 +169,20 @@ async def general_exception_handler(request: Request, exc: Exception):
             "error": {
                 "code": 500,
                 "message": "Error interno del servidor",
-                "path": str(request.url.path)
+                "path": str(request.url.path),
             },
-            "timestamp": time.time()
-        }
+            "timestamp": time.time(),
+        },
     )
 
 
-# Endpoint de health check
-@app.get("/health", tags=["Health"])
-async def health_check():
-    """
-    Health check endpoint para monitoreo
-    """
-    # Verificar base de datos
-    db_status = "ok" if check_database_connection() else "error"
-    
-    # Verificar cache
-    cache_status = "ok"
-    try:
-        if cache.redis_client:
-            cache.redis_client.ping()
-    except:
-        cache_status = "error"
-    
-    # Calcular uptime
-    uptime = time.time() - start_time
-    
-    return {
-        "status": "ok" if db_status == "ok" else "degraded",
-        "version": settings.PROJECT_VERSION,
-        "timestamp": time.time(),
-        "database": db_status,
-        "cache": cache_status,
-        "uptime_seconds": round(uptime, 2),
-        "environment": "development" if settings.DEBUG else "production"
-    }
-
-
-# Incluir routers de la API
+# Incluir routers
+app.include_router(health_router)
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Exponer métricas para Prometheus
+if Instrumentator:
+    Instrumentator().instrument(app).expose(app)
 
 
 # Personalizar OpenAPI schema
@@ -218,7 +190,7 @@ def custom_openapi():
     """Personalizar documentación OpenAPI"""
     if app.openapi_schema:
         return app.openapi_schema
-    
+
     openapi_schema = get_openapi(
         title=settings.PROJECT_NAME,
         version=settings.PROJECT_VERSION,
@@ -228,45 +200,31 @@ def custom_openapi():
 
     base_url = settings.BASE_URL or "https://cuantocuestabackend.onrender.com"
     openapi_schema["servers"] = [{"url": base_url}]
-    
+
     # Personalizar información adicional
-    openapi_schema["info"]["x-logo"] = {
-        "url": "https://cuantocuesta.cl/logo.png"
-    }
-    
+    openapi_schema["info"]["x-logo"] = {"url": "https://cuantocuesta.cl/logo.png"}
+
     # Agregar información de contacto
     openapi_schema["info"]["contact"] = {
         "name": "Equipo Cuanto Cuesta",
         "email": "api@cuantocuesta.cl",
-        "url": "https://cuantocuesta.cl"
+        "url": "https://cuantocuesta.cl",
     }
-    
+
     # Agregar información de licencia
     openapi_schema["info"]["license"] = {
         "name": "MIT",
-        "url": "https://opensource.org/licenses/MIT"
+        "url": "https://opensource.org/licenses/MIT",
     }
-    
+
     # Agregar tags personalizados
     openapi_schema["tags"] = [
-        {
-            "name": "Productos",
-            "description": "Búsqueda y gestión de productos"
-        },
-        {
-            "name": "Precios", 
-            "description": "Comparación y análisis de precios"
-        },
-        {
-            "name": "Tiendas",
-            "description": "Búsqueda geográfica de tiendas"
-        },
-        {
-            "name": "Health",
-            "description": "Monitoreo y estado del sistema"
-        }
+        {"name": "Productos", "description": "Búsqueda y gestión de productos"},
+        {"name": "Precios", "description": "Comparación y análisis de precios"},
+        {"name": "Tiendas", "description": "Búsqueda geográfica de tiendas"},
+        {"name": "Health", "description": "Monitoreo y estado del sistema"},
     ]
-    
+
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
@@ -290,12 +248,12 @@ async def root():
         "api_base": settings.API_V1_STR,
         "features": [
             "Búsqueda inteligente de productos",
-            "Comparación de precios en tiempo real", 
+            "Comparación de precios en tiempo real",
             "Búsqueda geográfica con PostGIS",
             "Manejo de caracteres especiales (Ñ, acentos)",
             "Optimización de listas de compra",
-            "API multi-plataforma"
-        ]
+            "API multi-plataforma",
+        ],
     }
 
 
@@ -305,6 +263,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL.lower()
+        log_level=settings.LOG_LEVEL.lower(),
     )
-
