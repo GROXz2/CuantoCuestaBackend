@@ -20,7 +20,11 @@ from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
 
 from redis import asyncio as aioredis
-from fastapi_limiter import FastAPILimiter
+
+try:
+    from fastapi_limiter import FastAPILimiter
+except ImportError:
+    FastAPILimiter = None
 
 from app.core.config import settings
 from app.api.v1.api import api_router
@@ -65,7 +69,8 @@ ERROR_MESSAGES = {
 async def lifespan(app: FastAPI):
     logger.info("Iniciando aplicación Cuanto Cuesta...")
     redis = aioredis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
-    await FastAPILimiter.init(redis)
+    if FastAPILimiter:
+        await FastAPILimiter.init(redis)
     yield
     await redis.close()
     logger.info("Cerrando aplicación...")
