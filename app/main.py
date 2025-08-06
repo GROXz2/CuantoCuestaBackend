@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.database import check_database_connection, create_database
 from app.core.cache import cache
 from app.api.v1.api import api_router
+import routers.gpt_router
 
 # Configurar logging
 logging.basicConfig(
@@ -211,6 +212,7 @@ async def health_check():
 
 # Incluir routers de la API
 app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(routers.gpt_router.router)
 
 
 # Personalizar OpenAPI schema

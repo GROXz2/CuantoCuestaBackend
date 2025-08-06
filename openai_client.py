@@ -11,22 +11,21 @@ logger = logging.getLogger(__name__)
 
 API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
 
+client: Optional[AsyncOpenAI] = None
 if API_KEY:
     client = AsyncOpenAI(api_key=API_KEY)
 else:
     logger.error(
         "OPENAI_API_KEY no configurada. El cliente de OpenAI no fue inicializado."
     )
-    client = None
 
 
 async def consulta_gpt(prompt: str) -> str:
     """Realiza una consulta al modelo GPT.
 
-    Si no hay clave de API configurada o ocurre algún error, se retorna un mensaje
-    descriptivo y se registra el incidente en el log.
+    Si no hay clave de API configurada o ocurre algún error, 
+    se retorna un mensaje descriptivo y se registra el incidente en el log.
     """
-
     if client is None:
         return "OPENAI_API_KEY no configurada. No se pudo realizar la consulta."
 

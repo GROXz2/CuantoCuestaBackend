@@ -78,6 +78,12 @@ class PriceComparisonResponse(BaseModel):
     recomendacion: str = Field(..., description="Recomendación de compra")
     ahorro_maximo: float = Field(..., description="Máximo ahorro posible")
     filtros_aplicados: Dict[str, Any] = Field(..., description="Filtros aplicados en la búsqueda")
+    marca_sugerida: Optional[str] = Field(
+        None, description="Marca alternativa sugerida cuando no hay stock"
+    )
+    explicacion: Optional[str] = Field(
+        None, description="Explicación de la sugerencia de marca"
+    )
     
     class Config(Config):
         schema_extra = {
