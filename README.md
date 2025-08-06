@@ -43,3 +43,18 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## Despliegue en Render
+
+1. Crea un servicio Web en [Render](https://render.com).
+2. En la sección **Environment** define las variables:
+   - `OPENAI_API_KEY`
+   - `DATABASE_URL`
+   - `REDIS_URL`
+3. Usa el siguiente comando de arranque:
+
+   ```bash
+   ./scripts/deploy_render.sh && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+   ```
+
+El script `deploy_render.sh` valida las variables de entorno y ejecuta las migraciones antes de iniciar la aplicación.
