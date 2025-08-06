@@ -10,6 +10,7 @@ from sqlalchemy.sql import select
 from app.models.product import Product
 from app.models.category import Category
 from app.repositories.base_repository import BaseRepository
+from app.utils.sanitizer import sanitize_text
 
 
 class ProductRepository(BaseRepository[Product, dict, dict]):
@@ -29,6 +30,9 @@ class ProductRepository(BaseRepository[Product, dict, dict]):
         """
         Búsqueda inteligente de productos usando texto completo y similitud
         """
+        search_term = sanitize_text(search_term)
+        if not search_term:
+            raise ValueError("search_term")
         query = db.query(Product).join(Category)
         
         # Filtrar solo productos activos
@@ -110,6 +114,9 @@ class ProductRepository(BaseRepository[Product, dict, dict]):
         limit: int = 100
     ) -> List[Product]:
         """Obtener productos por marca"""
+        brand = sanitize_text(brand)
+        if not brand:
+            raise ValueError("brand")
         return db.query(Product).filter(
             Product.brand.ilike(f'%{brand}%'),
             Product.is_active == True
@@ -158,6 +165,9 @@ class ProductRepository(BaseRepository[Product, dict, dict]):
         """
         Búsqueda por similitud con scoring
         """
+        search_term = sanitize_text(search_term)
+        if not search_term:
+            raise ValueError("search_term")
         query = text("""
             SELECT 
                 p.id,
