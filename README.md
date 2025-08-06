@@ -1,4 +1,6 @@
 # CuantoCuesta
+[![CI](https://github.com/CuantoCuesta/CuantoCuestaBackend/actions/workflows/ci.yml/badge.svg)](https://github.com/CuantoCuesta/CuantoCuestaBackend/actions/workflows/ci.yml) [![Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen)](#)
+
 Backend para optmizar cuentas con chatgpt.
 
 ## Configuración
