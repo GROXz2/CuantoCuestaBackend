@@ -7,13 +7,13 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from contextlib import asynccontextmanager
-import logging
+import structlog
 import asyncio
 from typing import AsyncGenerator
 
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Configuración del engine de base de datos
 engine = create_engine(
@@ -43,8 +43,8 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
-    except Exception as e:
-        logger.error(f"Error en sesión de base de datos: {e}")
+    except Exception:
+        logger.exception("Error en sesión de base de datos")
         db.rollback()
         raise
     finally:
@@ -61,8 +61,8 @@ async def get_database_session() -> Session:
     db = SessionLocal()
     try:
         return db
-    except Exception as e:
-        logger.error(f"Error creando sesión de base de datos: {e}")
+    except Exception:
+        logger.exception("Error creando sesión de base de datos")
         db.close()
         raise
 
@@ -79,8 +79,8 @@ async def get_async_db_session() -> AsyncGenerator[Session, None]:
     try:
         yield db
         db.commit()
-    except Exception as e:
-        logger.error(f"Error en sesión asíncrona: {e}")
+    except Exception:
+        logger.exception("Error en sesión asíncrona")
         db.rollback()
         raise
     finally:
@@ -109,8 +109,8 @@ def create_database():
         # Crear funciones de base de datos para conversation service
         create_conversation_functions()
         
-    except Exception as e:
-        logger.error(f"Error creando tablas: {e}")
+    except Exception:
+        logger.exception("Error creando tablas")
         raise
 
 
@@ -160,12 +160,12 @@ def create_conversation_indexes():
                     if "already exists" in str(e) or "ya existe" in str(e):
                         logger.debug(f"Índice ya existe (normal): {e}")
                     else:
-                        logger.warning(f"Error creando índice: {e}")
+                        logger.exception("Error creando índice")
                 
         logger.info("Índices del conversation service creados exitosamente")
         
-    except Exception as e:
-        logger.warning(f"Error creando índices del conversation service: {e}")
+    except Exception:
+        logger.exception("Error creando índices del conversation service")
 
 
 def create_conversation_functions():
@@ -255,8 +255,8 @@ def create_conversation_functions():
                 
         logger.info("Funciones del conversation service creadas exitosamente")
         
-    except Exception as e:
-        logger.warning(f"Error creando funciones del conversation service: {e}")
+    except Exception:
+        logger.exception("Error creando funciones del conversation service")
 
 
 def check_database_connection():
@@ -268,8 +268,8 @@ def check_database_connection():
             connection.execute(text("SELECT 1"))
         logger.info("Conexión a base de datos exitosa")
         return True
-    except Exception as e:
-        logger.error(f"Error conectando a base de datos: {e}")
+    except Exception:
+        logger.exception("Error conectando a base de datos")
         return False
 
 
@@ -293,14 +293,14 @@ def check_conversation_tables():
                 ), {"table_name": table})
                 
                 if not result.scalar():
-                    logger.error(f"Tabla requerida '{table}' no existe")
+                    logger.exception("Tabla requerida no existe", table=table)
                     return False
                     
         logger.info("Todas las tablas del conversation service están presentes")
         return True
         
-    except Exception as e:
-        logger.error(f"Error verificando tablas del conversation service: {e}")
+    except Exception:
+        logger.exception("Error verificando tablas del conversation service")
         return False
 
 
@@ -325,8 +325,8 @@ def initialize_conversation_service_db():
         logger.info("Base de datos del conversation service inicializada exitosamente")
         return True
         
-    except Exception as e:
-        logger.error(f"Error inicializando base de datos del conversation service: {e}")
+    except Exception:
+        logger.exception("Error inicializando base de datos del conversation service")
         raise
 
 
@@ -362,8 +362,8 @@ def cleanup_expired_data():
             
         logger.info(f"Limpieza completada: {deleted_users} usuarios expirados eliminados")
         
-    except Exception as e:
-        logger.error(f"Error en limpieza de datos: {e}")
+    except Exception:
+        logger.exception("Error en limpieza de datos")
 
 
 def get_database_stats():
@@ -403,7 +403,7 @@ def get_database_stats():
             
             return stats
             
-    except Exception as e:
-        logger.error(f"Error obteniendo estadísticas: {e}")
+    except Exception:
+        logger.exception("Error obteniendo estadísticas")
         return {}
 

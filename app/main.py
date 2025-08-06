@@ -3,6 +3,8 @@ Aplicación principal FastAPI para Cuanto Cuesta
 """
 import time
 import logging
+import sys
+import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +12,13 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
 import uvicorn
+import structlog
+from structlog.contextvars import bind_contextvars, clear_contextvars
+
+from openai import OpenAIError
+from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
+
 from redis import asyncio as aioredis
 from fastapi_limiter import FastAPILimiter
 
@@ -19,12 +28,25 @@ from app.core.cache import cache
 from app.api.v1.api import api_router
 import routers.gpt_router
 
-# Configurar logging
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Configurar logging estructurado
+log_level_name = "DEBUG" if settings.DEBUG else settings.LOG_LEVEL
+log_level = getattr(logging, log_level_name.upper(), logging.INFO)
+logging.basicConfig(level=log_level, format="%(message)s", stream=sys.stdout)
+
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.format_exc_info,
+        structlog.dev.ConsoleRenderer() if settings.DEBUG else structlog.processors.JSONRenderer(),
+    ],
+    wrapper_class=structlog.make_filtering_bound_logger(log_level),
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
 )
-logger = logging.getLogger(__name__)
+
+logger = structlog.get_logger(__name__)
 
 # Variable global para tiempo de inicio
 start_time = time.time()
@@ -125,28 +147,29 @@ if not settings.DEBUG:
 # Middleware personalizado para logging y métricas
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Middleware para logging de requests"""
+    """Middleware para logging de requests con contexto"""
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    user_id = request.headers.get("X-User-ID", "anonymous")
+    bind_contextvars(request_id=request_id, user_id=user_id)
+
     start_time_req = time.time()
-    
-    # Log del request
-    logger.info(f"Request: {request.method} {request.url}")
-    
-    # Procesar request
-    response = await call_next(request)
-    
-    # Calcular tiempo de procesamiento
+    logger.info("Request", method=request.method, url=str(request.url))
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("Error procesando request")
+        clear_contextvars()
+        raise
+
     process_time = time.time() - start_time_req
-    
-    # Log de la respuesta
     logger.info(
-        f"Response: {response.status_code} - "
-        f"Time: {process_time:.3f}s - "
-        f"Path: {request.url.path}"
+        "Response",
+        status_code=response.status_code,
+        process_time=round(process_time, 3),
+        path=request.url.path,
     )
-    
-    # Agregar header con tiempo de procesamiento
     response.headers["X-Process-Time"] = str(process_time)
-    
+    clear_contextvars()
     return response
 
 
@@ -168,11 +191,65 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
+@app.exception_handler(OpenAIError)
+async def openai_exception_handler(request: Request, exc: OpenAIError):
+    """Manejo de errores del cliente de OpenAI"""
+    logger.exception("Error en OpenAI")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": {
+                "code": 500,
+                "message": "Error en servicio OpenAI",
+                "path": str(request.url.path),
+            },
+            "timestamp": time.time(),
+        },
+    )
+
+
+@app.exception_handler(RedisError)
+async def redis_exception_handler(request: Request, exc: RedisError):
+    """Manejo de errores de Redis"""
+    logger.exception("Error en Redis")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": {
+                "code": 500,
+                "message": "Error en servicio Redis",
+                "path": str(request.url.path),
+            },
+            "timestamp": time.time(),
+        },
+    )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def db_exception_handler(request: Request, exc: SQLAlchemyError):
+    """Manejo de errores de base de datos"""
+    logger.exception("Error en base de datos")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": {
+                "code": 500,
+                "message": "Error en base de datos",
+                "path": str(request.url.path),
+            },
+            "timestamp": time.time(),
+        },
+    )
+
+
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """Manejador de errores generales"""
-    logger.error(f"Error no manejado: {exc}", exc_info=True)
-    
+    logger.exception("Error no manejado")
+
     return JSONResponse(
         status_code=500,
         content={
@@ -180,10 +257,10 @@ async def general_exception_handler(request: Request, exc: Exception):
             "error": {
                 "code": 500,
                 "message": "Error interno del servidor",
-                "path": str(request.url.path)
+                "path": str(request.url.path),
             },
-            "timestamp": time.time()
-        }
+            "timestamp": time.time(),
+        },
     )
 
 

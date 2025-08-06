@@ -45,4 +45,3 @@ async def consulta_gpt(prompt: str) -> str:
     except OpenAIError as exc:
         logger.error("Error de OpenAI: %s", exc)
         return "Ocurrió un error al consultar el modelo."
-
