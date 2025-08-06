@@ -7,8 +7,11 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 import time
 
+from fastapi_limiter import limiter
+from app.core.config import settings
 from app.core.database import get_db
 from app.services.price_service import price_service
+from app.services.product_service import product_service
 from app.schemas.price import (
     PriceComparisonResponse, BestDealsResponse, PriceHistoryResponse
 )
@@ -28,6 +31,10 @@ router = APIRouter()
         400: {"model": ErrorResponse, "description": "Parámetros inválidos"},
         500: {"model": ErrorResponse, "description": "Error interno del servidor"}
     }
+)
+@limiter.limit(
+    f"{settings.RATE_LIMIT_PER_MINUTE}/minute",
+    error_message="Demasiadas solicitudes, intenta nuevamente más tarde."
 )
 async def comparar_precios(
     producto_id: UUID = Path(..., description="ID único del producto"),
@@ -75,14 +82,21 @@ async def comparar_precios(
             radio_km=radio_km,
             incluir_mayoristas=incluir_mayoristas
         )
-        
+
         # Verificar si se encontró el producto
         if "error" in comparison:
             raise HTTPException(
                 status_code=404,
                 detail=comparison["error"]
             )
-        
+
+        # Sugerir marca alternativa cuando no hay stock disponible
+        if not comparison.get("precios"):
+            alternativa = product_service.get_alternative_brand(db, producto_id)
+            if alternativa:
+                comparison["marca_sugerida"] = alternativa
+                comparison["explicacion"] = f"Producto sin stock disponible. Se sugiere marca {alternativa}."
+
         return comparison
         
     except HTTPException:

@@ -1,7 +1,7 @@
 """
 Modelo de precios
 """
-from sqlalchemy import Column, String, DECIMAL, DateTime, Integer, ForeignKey, UniqueConstraint, func, Boolean, Text, Date
+from sqlalchemy import Column, String, DECIMAL, DateTime, Integer, ForeignKey, UniqueConstraint, func, Boolean, Text, Date, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -12,9 +12,18 @@ from app.core.database import Base
 
 class Price(Base):
     """Modelo de precios de productos por tienda"""
-    
+
     __tablename__ = "prices"
-    
+    __table_args__ = (
+        Index(
+            "ix_prices_product_store_scraped_at",
+            "product_id",
+            "store_id",
+            "scraped_at",
+        ),
+        {"schema": "pricing"},
+    )
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     product_id = Column(UUID(as_uuid=True), ForeignKey("products.products.id"), nullable=False, index=True)
     store_id = Column(UUID(as_uuid=True), ForeignKey("stores.stores.id"), nullable=False, index=True)

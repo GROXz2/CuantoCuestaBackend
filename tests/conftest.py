@@ -7,6 +7,26 @@ import sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.types import CHAR
+from geoalchemy2.types import Geography
+
+
+@compiles(PGUUID, "sqlite")
+def compile_pg_uuid(element, compiler, **kw):
+    return "CHAR(36)"
+
+
+@compiles(JSONB, "sqlite")
+def compile_jsonb(element, compiler, **kw):
+    return "TEXT"
+
+
+@compiles(Geography, "sqlite")
+def compile_geography(element, compiler, **kw):
+    return "TEXT"
 
 # Agregar el directorio raíz al path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -20,8 +40,11 @@ TEST_DATABASE_URL = "sqlite:///./test.db"
 
 # Crear engine de test
 test_engine = create_engine(
-    TEST_DATABASE_URL, 
-    connect_args={"check_same_thread": False}
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    execution_options={
+        "schema_translate_map": {"products": None, "stores": None, "pricing": None}
+    }
 )
 
 # Crear session de test
@@ -62,7 +85,16 @@ def client(test_app):
 def db_session():
     """Fixture de sesión de base de datos para cada test"""
     # Crear tablas
-    Base.metadata.create_all(bind=test_engine)
+    from app.models import category, product, store, price
+    Base.metadata.create_all(
+        bind=test_engine,
+        tables=[
+            category.Category.__table__,
+            product.Product.__table__,
+            store.Store.__table__,
+            price.Price.__table__,
+        ],
+    )
     
     # Crear sesión
     session = TestingSessionLocal()
@@ -72,7 +104,16 @@ def db_session():
     finally:
         session.close()
         # Limpiar tablas después de cada test
-        Base.metadata.drop_all(bind=test_engine)
+        from app.models import category, product, store, price
+        Base.metadata.drop_all(
+            bind=test_engine,
+            tables=[
+                category.Category.__table__,
+                product.Product.__table__,
+                store.Store.__table__,
+                price.Price.__table__,
+            ],
+        )
 
 
 @pytest.fixture
@@ -169,6 +210,29 @@ def sample_product(db_session, sample_category):
 
 
 @pytest.fixture
+def sample_product_alt(db_session, sample_category):
+    """Producto alternativo de ejemplo"""
+    from app.models.product import Product
+    import uuid
+
+    product = Product(
+        id=uuid.uuid4(),
+        name="Alt Product",
+        brand="Alternative Brand",
+        category_id=sample_category.id,
+        barcode="9876543210987",
+        description="Producto alternativo",
+        unit_type="unidad",
+        unit_size="500g",
+        image_url="https://test.com/alt_product.jpg"
+    )
+    db_session.add(product)
+    db_session.commit()
+    db_session.refresh(product)
+    return product
+
+
+@pytest.fixture
 def sample_price(db_session, sample_product, sample_store):
     """Fixture de precio de ejemplo"""
     from app.models.price import Price
@@ -184,6 +248,30 @@ def sample_price(db_session, sample_product, sample_store):
         discount_percentage=20.0,
         stock_status="available",
         promotion_description="20% de descuento",
+        scraped_at=datetime.now()
+    )
+    db_session.add(price)
+    db_session.commit()
+    db_session.refresh(price)
+    return price
+
+
+@pytest.fixture
+def sample_price_alt(db_session, sample_product_alt, sample_store):
+    """Precio para producto alternativo"""
+    from app.models.price import Price
+    from datetime import datetime
+    import uuid
+
+    price = Price(
+        id=uuid.uuid4(),
+        product_id=sample_product_alt.id,
+        store_id=sample_store.id,
+        normal_price=1400,
+        discount_price=1100,
+        discount_percentage=21.0,
+        stock_status="available",
+        promotion_description="21% de descuento",
         scraped_at=datetime.now()
     )
     db_session.add(price)
