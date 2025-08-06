@@ -53,10 +53,17 @@ structlog.configure(
 
 logger = structlog.get_logger(__name__)
 
+# Mensajes de error centralizados
+ERROR_MESSAGES = {
+    "GENERIC": "Error interno del servidor",
+    "INVALID_TOKEN": "Token de autenticación inválido",
+    "PRODUCT_SEARCH_ERROR": "No se pudo buscar productos",
+    "OPTIMIZE_ERROR": "No se pudo optimizar la lista de compras",
+}
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Iniciando aplicación Cuanto Cuesta...")
-    # Inicializar Redis + rate limiter
     redis = aioredis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
     await FastAPILimiter.init(redis)
     yield
@@ -114,7 +121,15 @@ async def log_requests(request: Request, call_next):
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
-        content={"success": False, "error": {"code": exc.status_code, "message": exc.detail, "path": str(request.url.path)}, "timestamp": time.time()},
+        content={
+            "success": False,
+            "error": {
+                "code": exc.status_code,
+                "message": exc.detail or ERROR_MESSAGES["GENERIC"],
+                "path": str(request.url.path),
+            },
+            "timestamp": time.time(),
+        },
     )
 
 @app.exception_handler(OpenAIError)
@@ -122,7 +137,15 @@ async def openai_exception_handler(request: Request, exc: OpenAIError):
     logger.exception("Error en OpenAI")
     return JSONResponse(
         status_code=500,
-        content={"success": False, "error": {"code": 500, "message": "Error en servicio OpenAI", "path": str(request.url.path)}, "timestamp": time.time()},
+        content={
+            "success": False,
+            "error": {
+                "code": 500,
+                "message": ERROR_MESSAGES["GENERIC"],
+                "path": str(request.url.path),
+            },
+            "timestamp": time.time(),
+        },
     )
 
 @app.exception_handler(RedisError)
@@ -130,7 +153,15 @@ async def redis_exception_handler(request: Request, exc: RedisError):
     logger.exception("Error en Redis")
     return JSONResponse(
         status_code=500,
-        content={"success": False, "error": {"code": 500, "message": "Error en servicio Redis", "path": str(request.url.path)}, "timestamp": time.time()},
+        content={
+            "success": False,
+            "error": {
+                "code": 500,
+                "message": "Error en servicio Redis",
+                "path": str(request.url.path),
+            },
+            "timestamp": time.time(),
+        },
     )
 
 @app.exception_handler(SQLAlchemyError)
@@ -138,7 +169,15 @@ async def db_exception_handler(request: Request, exc: SQLAlchemyError):
     logger.exception("Error en base de datos")
     return JSONResponse(
         status_code=500,
-        content={"success": False, "error": {"code": 500, "message": "Error en base de datos", "path": str(request.url.path)}, "timestamp": time.time()},
+        content={
+            "success": False,
+            "error": {
+                "code": 500,
+                "message": "Error en base de datos",
+                "path": str(request.url.path),
+            },
+            "timestamp": time.time(),
+        },
     )
 
 @app.exception_handler(Exception)
@@ -146,7 +185,15 @@ async def general_exception_handler(request: Request, exc: Exception):
     logger.exception("Error no manejado")
     return JSONResponse(
         status_code=500,
-        content={"success": False, "error": {"code": 500, "message": "Error interno del servidor", "path": str(request.url.path)}, "timestamp": time.time()},
+        content={
+            "success": False,
+            "error": {
+                "code": 500,
+                "message": ERROR_MESSAGES["GENERIC"],
+                "path": str(request.url.path),
+            },
+            "timestamp": time.time(),
+        },
     )
 
 # Routers
@@ -162,7 +209,12 @@ if Instrumentator:
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
-    schema = get_openapi(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION, description=app.description, routes=app.routes)
+    schema = get_openapi(
+        title=settings.PROJECT_NAME,
+        version=settings.PROJECT_VERSION,
+        description=app.description,
+        routes=app.routes,
+    )
     base = settings.BASE_URL or "https://cuantocuestabackend.onrender.com"
     schema["servers"] = [{"url": base}]
     schema["info"].update({
@@ -204,4 +256,3 @@ if __name__ == "__main__":
         reload=settings.DEBUG,
         log_level=settings.LOG_LEVEL.lower(),
     )
-

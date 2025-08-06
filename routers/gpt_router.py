@@ -1,13 +1,22 @@
 # backend/routers/gpt_router.py
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, constr, StrictFloat
+
+import logging
 from typing import List, Optional
 
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel, Field, constr, StrictFloat
+
+from auth import verify_gpt_token
+from app.main import ERROR_MESSAGES
 from app.utils.sanitizer import sanitize_text
 
-router = APIRouter(prefix="/api", tags=["gpt"] )
+router = APIRouter(prefix="/api", tags=["gpt"])
+
+logger = logging.getLogger(__name__)
+
 
 def _sanitize_and_validate(value: str) -> str:
+    """Aplica el sanitizer y valida que no quede vacío."""
     sanitized = sanitize_text(value)
     if not sanitized:
         raise HTTPException(status_code=422, detail="Invalid input")
@@ -18,6 +27,7 @@ class SearchRequest(BaseModel):
     query: constr(strict=True, min_length=1, max_length=100, pattern=r"^[\w\s-]+$")
     category: Optional[constr(strict=True, max_length=50, pattern=r"^[\w\s-]+$")] = None
 
+
 class Location(BaseModel):
     lat: StrictFloat = Field(..., ge=-90, le=90)
     lon: StrictFloat = Field(..., ge=-180, le=180)
@@ -27,40 +37,51 @@ class OptimizeRequest(BaseModel):
     products: List[constr(strict=True, min_length=1, max_length=100, pattern=r"^[\w\s-]+$")]
     location: Optional[Location] = None
 
+
 @router.get("/products/search")
-async def search_products(query: str, category: Optional[str] = None):
-    """Endpoint específico para que GPT busque productos"""
+async def search_products(
+    query: str,
+    category: Optional[str] = None,
+    token: str = Depends(verify_gpt_token),
+):
+    """Endpoint específico para que GPT busque productos (requiere token)."""
     try:
-        query = _sanitize_and_validate(query)
-        category = _sanitize_and_validate(category) if category else None
-        # Tu lógica de búsqueda aquí
-        products = await search_products_in_db(query, category)
-        
+        q = _sanitize_and_validate(query)
+        c = _sanitize_and_validate(category) if category else None
+
+        products = await search_products_in_db(q, c)
         return {
             "success": True,
             "data": products,
-            "message": f"Encontrados {len(products)} productos para '{query}'"
+            "message": f"Encontrados {len(products)} productos para '{q}'",
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException as he:
+        # pasa 422 de sanitización o errores controlados
+        raise he
+    except Exception:
+        logger.exception("Error en search_products")
+        raise HTTPException(status_code=500, detail=ERROR_MESSAGES["PRODUCT_SEARCH_ERROR"])
+
 
 @router.post("/optimize")
-async def optimize_shopping_list(request: OptimizeRequest):
-
-    """Endpoint para optimizar lista de compras"""
+async def optimize_shopping_list(
+    request: OptimizeRequest,
+    token: str = Depends(verify_gpt_token),
+):
+    """Endpoint para optimizar lista de compras (requiere token)."""
     try:
         sanitized_products = [_sanitize_and_validate(p) for p in request.products]
-        # Tu lógica de optimización aquí
         optimization = await optimize_purchases(sanitized_products, request.location)
-
-        
         return {
             "success": True,
             "data": optimization,
-            "message": "Lista optimizada correctamente"
+            "message": "Lista optimizada correctamente",
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException as he:
+        raise he
+    except Exception:
+        logger.exception("Error en optimize_shopping_list")
+        raise HTTPException(status_code=500, detail=ERROR_MESSAGES["OPTIMIZE_ERROR"])
 
 
 async def search_products_in_db(query: str, category: Optional[str] = None):
@@ -119,9 +140,8 @@ async def optimize_purchases(products: List[str], location: Optional[dict] = Non
             price_analyzer=price_analyzer,
         )
 
-        request = OptimizationRequest(productos=products, ubicacion=location)
-        result = await service.optimize_shopping_list(request)
-        return result
+        req = OptimizationRequest(productos=products, ubicacion=location)
+        return await service.optimize_shopping_list(req)
     except HTTPException:
         raise
     except Exception as e:
