@@ -4,11 +4,13 @@ Servicio de productos con lógica de negocio
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 
 from app.repositories.product_repository import product_repository
 from app.repositories.price_repository import price_repository
 from app.core.cache import cache, cache_product_key, cache_search_key
 from app.core.config import settings
+from app.utils.sanitizer import sanitize_text
 
 
 class ProductService:
@@ -35,6 +37,10 @@ class ProductService:
         """
         Búsqueda inteligente de productos con cache
         """
+        search_term = sanitize_text(search_term)
+        if not search_term:
+            raise HTTPException(status_code=422, detail="search_term")
+
         # Generar clave de cache
         filters = {
             'category_id': str(category_id) if category_id else None,
@@ -54,9 +60,12 @@ class ProductService:
             return cached_result
         
         # Buscar productos
-        products = self.product_repo.search_products(
-            db, search_term, category_id, limite, skip
-        )
+        try:
+            products = self.product_repo.search_products(
+                db, search_term, category_id, limite, skip
+            )
+        except ValueError:
+            raise HTTPException(status_code=422, detail="search_term")
         
         # Enriquecer con información de precios
         enriched_products = []
