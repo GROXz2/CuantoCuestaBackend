@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 import time
 
+from fastapi_limiter import limiter
+from app.core.config import settings
 from app.core.database import get_db
 from app.services.product_service import product_service
 from app.schemas.product import (
@@ -28,6 +30,10 @@ router = APIRouter()
         400: {"model": ErrorResponse, "description": "Parámetros de búsqueda inválidos"},
         500: {"model": ErrorResponse, "description": "Error interno del servidor"}
     }
+)
+@limiter.limit(
+    f"{settings.RATE_LIMIT_PER_MINUTE}/minute",
+    error_message="Demasiadas solicitudes, intenta nuevamente más tarde."
 )
 async def buscar_productos(
     q: str = Query(..., min_length=1, max_length=100, description="Término de búsqueda"),
@@ -81,7 +87,15 @@ async def buscar_productos(
             limite=limite,
             skip=skip
         )
-        
+
+        # Sugerir marca alternativa cuando no hay stock disponible
+        for prod in result.get("productos", []):
+            if prod.get("tiendas_disponibles", 0) == 0:
+                alternativa = product_service.get_alternative_brand(db, UUID(prod["id"]))
+                if alternativa:
+                    prod["marca_sugerida"] = alternativa
+                    prod["explicacion"] = f"Producto sin stock disponible. Se sugiere marca {alternativa}."
+
         # Agregar tiempo de respuesta
         end_time = time.time()
         result["tiempo_respuesta_ms"] = int((end_time - start_time) * 1000)

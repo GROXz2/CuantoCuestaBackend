@@ -55,6 +55,12 @@ class ProductResponse(BaseModel):
     porcentaje_descuento: Optional[float] = Field(None, description="Porcentaje de descuento")
     tienda_mejor_precio: Optional[str] = Field(None, description="Tienda con mejor precio")
     tiendas_disponibles: int = Field(0, description="Número de tiendas donde está disponible")
+    marca_sugerida: Optional[str] = Field(
+        None, description="Marca alternativa sugerida cuando no hay stock"
+    )
+    explicacion: Optional[str] = Field(
+        None, description="Explicación de la sugerencia de marca"
+    )
     
     class Config(Config):
         schema_extra = {

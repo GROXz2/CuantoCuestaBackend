@@ -21,12 +21,9 @@ engine = create_engine(
     echo=settings.DEBUG,
     pool_pre_ping=True,
     pool_recycle=300,
-    pool_size=10,  # Aumentado para conversation service
-    max_overflow=30,  # Aumentado para conversation service
-    connect_args={
-        "client_encoding": "utf8",
-        "application_name": "CuantoCuesta_ConversationService"
-    }
+    pool_size=2,
+    max_overflow=5,
+    connect_args={"sslmode": "require"},
 )
 
 # Configuración de sesiones

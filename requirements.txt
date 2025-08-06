@@ -15,6 +15,7 @@ passlib[bcrypt]==1.7.4
 # Cache y Redis
 redis==5.0.1
 hiredis==2.2.3
+fastapi-limiter==0.1.5
 
 # Validación y configuración
 pydantic==2.5.0
@@ -50,3 +51,5 @@ mkdocs==1.5.3
 mkdocs-material==9.4.8
 
 numpy==2.3.1
+pytesseract==0.3.10
+Pillow==10.2.0

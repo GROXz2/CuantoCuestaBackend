@@ -1,21 +1,47 @@
-# openai_client.py
+"""Cliente asíncrono para interactuar con la API de OpenAI."""
+
+import asyncio
+import logging
 import os
-import structlog
-from openai import OpenAI, OpenAIError
+from typing import Optional
 
-logger = structlog.get_logger(__name__)
+from openai import AsyncOpenAI, AuthenticationError, OpenAIError
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+logger = logging.getLogger(__name__)
+
+API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
+
+client: Optional[AsyncOpenAI] = None
+if API_KEY:
+    client = AsyncOpenAI(api_key=API_KEY)
+else:
+    logger.error(
+        "OPENAI_API_KEY no configurada. El cliente de OpenAI no fue inicializado."
+    )
 
 
-def consulta_gpt(prompt: str) -> str:
+async def consulta_gpt(prompt: str) -> str:
+    """Realiza una consulta al modelo GPT.
+
+    Si no hay clave de API configurada o ocurre algún error, 
+    se retorna un mensaje descriptivo y se registra el incidente en el log.
+    """
+    if client is None:
+        return "OPENAI_API_KEY no configurada. No se pudo realizar la consulta."
+
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
         )
         return response.choices[0].message.content.strip()
-    except OpenAIError:
-        logger.exception("Error consultando a OpenAI")
-        raise
+    except AuthenticationError as exc:
+        logger.error("Error de autenticación con OpenAI: %s", exc)
+        return "Error de autenticación con OpenAI."
+    except (asyncio.TimeoutError, TimeoutError) as exc:
+        logger.error("La solicitud a OpenAI excedió el tiempo de espera: %s", exc)
+        return "La solicitud a OpenAI excedió el tiempo de espera."
+    except OpenAIError as exc:
+        logger.error("Error de OpenAI: %s", exc)
+        return "Ocurrió un error al consultar el modelo."

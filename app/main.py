@@ -14,14 +14,19 @@ from fastapi.openapi.utils import get_openapi
 import uvicorn
 import structlog
 from structlog.contextvars import bind_contextvars, clear_contextvars
+
 from openai import OpenAIError
 from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
+
+from redis import asyncio as aioredis
+from fastapi_limiter import FastAPILimiter
 
 from app.core.config import settings
 from app.core.database import check_database_connection, create_database
 from app.core.cache import cache
 from app.api.v1.api import api_router
+import routers.gpt_router
 
 # Configurar logging estructurado
 log_level_name = "DEBUG" if settings.DEBUG else settings.LOG_LEVEL
@@ -51,15 +56,21 @@ start_time = time.time()
 async def lifespan(app: FastAPI):
 
     logger.info("Iniciando aplicación Cuanto Cuesta...")
-    
+
+    redis = aioredis.from_url(
+        settings.REDIS_URL, encoding="utf-8", decode_responses=True
+    )
+    await FastAPILimiter.init(redis)
+
     # Verificar conexión a base de datos (desactivado temporalmente)
     # if not await verify_database_connection():
     #     logger.error("No se pudo conectar a la base de datos")
     #     raise Exception("Error de conexión a base de datos")
-    
+
     yield
-    
+
     # Shutdown
+    await redis.close()
     logger.info("Cerrando aplicación...")
 
 
@@ -119,7 +130,7 @@ app = FastAPI(
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, especificar dominios exactos
+    allow_origins=settings.CORS_ORIGINS.split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -286,6 +297,7 @@ async def health_check():
 
 # Incluir routers de la API
 app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(routers.gpt_router.router)
 
 
 # Personalizar OpenAPI schema
