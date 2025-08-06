@@ -2,14 +2,14 @@
 Configuración de cache Redis para Cuanto Cuesta
 """
 import json
-import logging
 from typing import Any, Optional, Union
 import redis
+import structlog
 from redis.exceptions import RedisError
 
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class RedisCache:
@@ -33,8 +33,8 @@ class RedisCache:
             # Probar conexión
             self.redis_client.ping()
             logger.info("Conexión a Redis exitosa")
-        except RedisError as e:
-            logger.error(f"Error conectando a Redis: {e}")
+        except RedisError:
+            logger.exception("Error conectando a Redis")
             self.redis_client = None
     
     def get(self, key: str) -> Optional[Any]:
@@ -47,8 +47,8 @@ class RedisCache:
             if value:
                 return json.loads(value)
             return None
-        except (RedisError, json.JSONDecodeError) as e:
-            logger.error(f"Error obteniendo del cache {key}: {e}")
+        except (RedisError, json.JSONDecodeError):
+            logger.exception("Error obteniendo del cache", key=key)
             return None
     
     def set(
@@ -67,8 +67,8 @@ class RedisCache:
                 return self.redis_client.setex(key, ttl, serialized_value)
             else:
                 return self.redis_client.set(key, serialized_value)
-        except (RedisError, json.JSONEncodeError) as e:
-            logger.error(f"Error estableciendo en cache {key}: {e}")
+        except (RedisError, json.JSONEncodeError):
+            logger.exception("Error estableciendo en cache", key=key)
             return False
     
     def delete(self, key: str) -> bool:
@@ -78,8 +78,8 @@ class RedisCache:
         
         try:
             return bool(self.redis_client.delete(key))
-        except RedisError as e:
-            logger.error(f"Error eliminando del cache {key}: {e}")
+        except RedisError:
+            logger.exception("Error eliminando del cache", key=key)
             return False
     
     def delete_pattern(self, pattern: str) -> int:
@@ -92,8 +92,8 @@ class RedisCache:
             if keys:
                 return self.redis_client.delete(*keys)
             return 0
-        except RedisError as e:
-            logger.error(f"Error eliminando patrón {pattern}: {e}")
+        except RedisError:
+            logger.exception("Error eliminando patrón", pattern=pattern)
             return 0
     
     def exists(self, key: str) -> bool:
@@ -103,8 +103,8 @@ class RedisCache:
         
         try:
             return bool(self.redis_client.exists(key))
-        except RedisError as e:
-            logger.error(f"Error verificando existencia {key}: {e}")
+        except RedisError:
+            logger.exception("Error verificando existencia", key=key)
             return False
     
     def increment(self, key: str, amount: int = 1) -> Optional[int]:
@@ -114,8 +114,8 @@ class RedisCache:
         
         try:
             return self.redis_client.incrby(key, amount)
-        except RedisError as e:
-            logger.error(f"Error incrementando {key}: {e}")
+        except RedisError:
+            logger.exception("Error incrementando", key=key)
             return None
     
     def expire(self, key: str, ttl: int) -> bool:
@@ -125,8 +125,8 @@ class RedisCache:
         
         try:
             return bool(self.redis_client.expire(key, ttl))
-        except RedisError as e:
-            logger.error(f"Error estableciendo TTL {key}: {e}")
+        except RedisError:
+            logger.exception("Error estableciendo TTL", key=key)
             return False
 
 
