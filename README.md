@@ -15,14 +15,20 @@ ejemplo más simple en `examples/simple_main.py` solo para pruebas locales.
 
 1. Define tu clave de OpenAI en el archivo `.env` mediante la variable
    `OPENAI_API_KEY`.
-2. Importa y utiliza la función `consulta_gpt` del módulo `openai_client.py` en
-   tu código.
+2. Importa y utiliza la función asíncrona `consulta_gpt` del módulo
+   `openai_client.py` en tu código.
 3. Puedes experimentar de forma local ejecutando el ejemplo
    `examples/simple_main.py`.
 
 ```python
+import asyncio
 from openai_client import consulta_gpt
 
-respuesta = consulta_gpt("¿Cuál es la capital de Chile?")
-print(respuesta)
+
+async def main():
+    respuesta = await consulta_gpt("¿Cuál es la capital de Chile?")
+    print(respuesta)
+
+
+asyncio.run(main())
 ```
