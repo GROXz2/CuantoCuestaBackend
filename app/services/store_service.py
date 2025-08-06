@@ -4,10 +4,12 @@ Servicio de tiendas con búsqueda geográfica y manejo de caracteres especiales
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 
 from app.repositories.store_repository import store_repository
 from app.core.cache import cache, cache_store_key
 from app.core.config import settings
+from app.utils.sanitizer import sanitize_text
 
 
 class StoreService:
@@ -27,6 +29,9 @@ class StoreService:
         Búsqueda inteligente por comuna con manejo de caracteres especiales
         Encuentra "Ñuñoa" con cualquier variación: "Nunoa", "nunoa", "NUNOA"
         """
+        termino = sanitize_text(termino)
+        if not termino:
+            raise HTTPException(status_code=422, detail="termino")
         cache_key = f"stores_commune:{termino.lower()}:{limite}"
         
         # Intentar obtener del cache
@@ -35,7 +40,10 @@ class StoreService:
             return cached_stores
         
         # Buscar en la base de datos
-        stores_data = self.store_repo.search_by_commune(db, termino, limite)
+        try:
+            stores_data = self.store_repo.search_by_commune(db, termino, limite)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="termino")
         
         # Formatear respuesta
         formatted_stores = []

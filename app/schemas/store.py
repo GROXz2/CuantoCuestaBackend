@@ -2,7 +2,7 @@
 Schemas para tiendas con nomenclatura en español
 """
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictStr
 from uuid import UUID
 
 from app.schemas.common import CoordinatesResponse, SupermarketInfo, Config
@@ -10,7 +10,9 @@ from app.schemas.common import CoordinatesResponse, SupermarketInfo, Config
 
 class StoreSearchRequest(BaseModel):
     """Request para búsqueda de tiendas"""
-    termino: str = Field(..., min_length=1, max_length=100, description="Término de búsqueda (comuna, nombre)")
+    termino: StrictStr = Field(
+        ..., min_length=1, max_length=100, pattern=r"^[\w\s-]+$", description="Término de búsqueda (comuna, nombre)"
+    )
     limite: int = Field(50, ge=1, le=100, description="Número máximo de resultados")
     
     class Config(Config):

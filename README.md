@@ -1,4 +1,6 @@
 # CuantoCuesta
+[![CI](https://github.com/CuantoCuesta/CuantoCuestaBackend/actions/workflows/ci.yml/badge.svg)](https://github.com/CuantoCuesta/CuantoCuestaBackend/actions/workflows/ci.yml) [![Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen)](#)
+
 Backend para optmizar cuentas con chatgpt.
 
 ## Configuración
@@ -8,6 +10,17 @@ requiere al menos `OPENAI_API_KEY` y `DATABASE_URL`. Si tu contraseña de base d
 datos contiene caracteres especiales (por ejemplo `!`), pon el valor entre
 comillas o codifica esos caracteres (`!` → `%21`).
 
+### Render
+
+Si despliegas la aplicación en [Render](https://render.com), debes definir la
+variable `DATABASE_URL` en tu servicio:
+
+1. En el panel de Render ve a tu servicio → **Environment**.
+2. Agrega una nueva variable con nombre `DATABASE_URL` y como valor la cadena de
+   conexión de tu base de datos PostgreSQL.
+3. Guarda los cambios y realiza el despliegue para que la aplicación use esta
+   configuración.
+
 La versión completa de la API se ejecuta desde `app/main.py`. Se incluye un
 ejemplo más simple en `examples/simple_main.py` solo para pruebas locales.
 
@@ -15,14 +28,35 @@ ejemplo más simple en `examples/simple_main.py` solo para pruebas locales.
 
 1. Define tu clave de OpenAI en el archivo `.env` mediante la variable
    `OPENAI_API_KEY`.
-2. Importa y utiliza la función `consulta_gpt` del módulo `openai_client.py` en
-   tu código.
+2. Importa y utiliza la función asíncrona `consulta_gpt` del módulo
+   `openai_client.py` en tu código.
 3. Puedes experimentar de forma local ejecutando el ejemplo
    `examples/simple_main.py`.
 
 ```python
+import asyncio
 from openai_client import consulta_gpt
 
-respuesta = consulta_gpt("¿Cuál es la capital de Chile?")
-print(respuesta)
+
+async def main():
+    respuesta = await consulta_gpt("¿Cuál es la capital de Chile?")
+    print(respuesta)
+
+
+asyncio.run(main())
 ```
+
+## Despliegue en Render
+
+1. Crea un servicio Web en [Render](https://render.com).
+2. En la sección **Environment** define las variables:
+   - `OPENAI_API_KEY`
+   - `DATABASE_URL`
+   - `REDIS_URL`
+3. Usa el siguiente comando de arranque:
+
+   ```bash
+   ./scripts/deploy_render.sh && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+   ```
+
+El script `deploy_render.sh` valida las variables de entorno y ejecuta las migraciones antes de iniciar la aplicación.

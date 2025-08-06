@@ -68,6 +68,38 @@ class TestProductsEndpoints:
         response = client.get("/api/v1/productos/buscar?q=Test&lat=-33.4489")
         
         TestUtils.assert_response_error(response, 400)
+
+    def test_buscar_productos_con_sugerencia(
+        self,
+        client: TestClient,
+        sample_product,
+        sample_product_alt,
+        sample_price_alt,
+    ):
+        """Debe sugerir marca alternativa cuando no hay stock"""
+        response = client.get(f"/api/v1/productos/buscar?q={sample_product.name}")
+
+        TestUtils.assert_response_success(response)
+        data = response.json()
+        producto = data["productos"][0]
+        assert producto["marca_sugerida"] == "Alternative Brand"
+        assert "Alternative Brand" in producto["explicacion"]
+
+    def test_buscar_productos_sin_sugerencia(
+        self,
+        client: TestClient,
+        sample_product,
+        sample_price,
+        sample_product_alt,
+        sample_price_alt,
+    ):
+        """No debe sugerir marca cuando hay stock disponible"""
+        response = client.get(f"/api/v1/productos/buscar?q={sample_product.name}")
+
+        TestUtils.assert_response_success(response)
+        data = response.json()
+        producto = data["productos"][0]
+        assert "marca_sugerida" not in producto
     
     def test_buscar_productos_invalid_price_range(self, client: TestClient):
         """Test búsqueda con rango de precios inválido"""

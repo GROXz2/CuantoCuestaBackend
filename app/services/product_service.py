@@ -4,11 +4,13 @@ Servicio de productos con lógica de negocio
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 
 from app.repositories.product_repository import product_repository
 from app.repositories.price_repository import price_repository
 from app.core.cache import cache, cache_product_key, cache_search_key
 from app.core.config import settings
+from app.utils.sanitizer import sanitize_text
 
 
 class ProductService:
@@ -18,7 +20,53 @@ class ProductService:
         self.product_repo = product_repository
         self.price_repo = price_repository
         self.cache = cache
-    
+
+    def get_products(
+        self,
+        db: Session,
+        category_id: Optional[UUID] = None,
+        limit: int = 50,
+        skip: int = 0
+    ) -> List[Dict[str, Any]]:
+        """Obtener productos con cache para resultados frecuentes"""
+
+        filters = {
+            "category_id": str(category_id) if category_id else None,
+            "limit": limit,
+            "skip": skip,
+        }
+        cache_key = cache_search_key("products_list", filters)
+
+        cached_products = self.cache.get(cache_key)
+        if cached_products:
+            return cached_products
+
+        db_filters = {}
+        if category_id:
+            db_filters["category_id"] = category_id
+
+        products = self.product_repo.get_multi_active(
+            db, skip=skip, limit=limit, filters=db_filters
+        )
+
+        result = [
+            {
+                "id": str(p.id),
+                "nombre": p.name,
+                "marca": p.brand,
+                "categoria_id": str(p.category_id),
+                "codigo_barras": p.barcode,
+                "tipo_unidad": p.unit_type,
+                "tamaño_unidad": p.unit_size,
+                "imagen_url": p.image_url,
+                "descripcion": p.description,
+            }
+            for p in products
+        ]
+
+        self.cache.set(cache_key, result, settings.CACHE_TTL_PRODUCTS)
+        return result
+
     def search_products(
         self,
         db: Session,
@@ -35,6 +83,10 @@ class ProductService:
         """
         Búsqueda inteligente de productos con cache
         """
+        search_term = sanitize_text(search_term)
+        if not search_term:
+            raise HTTPException(status_code=422, detail="search_term")
+
         # Generar clave de cache
         filters = {
             'category_id': str(category_id) if category_id else None,
@@ -54,9 +106,12 @@ class ProductService:
             return cached_result
         
         # Buscar productos
-        products = self.product_repo.search_products(
-            db, search_term, category_id, limite, skip
-        )
+        try:
+            products = self.product_repo.search_products(
+                db, search_term, category_id, limite, skip
+            )
+        except ValueError:
+            raise HTTPException(status_code=422, detail="search_term")
         
         # Enriquecer con información de precios
         enriched_products = []
@@ -166,8 +221,31 @@ class ProductService:
         
         # Guardar en cache
         self.cache.set(cache_key, product_data, settings.CACHE_TTL_PRODUCTS)
-        
+
         return product_data
+
+    def get_alternative_brand(
+        self,
+        db: Session,
+        product_id: UUID
+    ) -> Optional[str]:
+        """Buscar una marca alternativa dentro de la misma categoría"""
+        # Obtener información del producto original
+        product = self.product_repo.get_active(db, product_id)
+        if not product or not product.category_id:
+            return None
+
+        # Buscar otros productos de la misma categoría
+        alternatives = self.product_repo.get_by_category(db, product.category_id)
+        for alt in alternatives:
+            if alt.id == product.id or alt.brand == product.brand:
+                continue
+
+            # Verificar que la marca alternativa tenga stock disponible
+            if self.price_repo.get_current_prices_for_product(db, alt.id):
+                return alt.brand
+
+        return None
     
     def get_popular_products(
         self,
