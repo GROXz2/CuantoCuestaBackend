@@ -26,6 +26,14 @@ logger = logging.getLogger(__name__)
 # Variable global para tiempo de inicio
 start_time = time.time()
 
+# Mensajes de error centralizados
+ERROR_MESSAGES = {
+    "GENERIC": "Error interno del servidor",
+    "INVALID_TOKEN": "Token de autenticación inválido",
+    "PRODUCT_SEARCH_ERROR": "No se pudo buscar productos",
+    "OPTIMIZE_ERROR": "No se pudo optimizar la lista de compras",
+}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -151,7 +159,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "success": False,
             "error": {
                 "code": exc.status_code,
-                "message": exc.detail,
+                "message": exc.detail or ERROR_MESSAGES["GENERIC"],
                 "path": str(request.url.path)
             },
             "timestamp": time.time()
@@ -170,7 +178,7 @@ async def general_exception_handler(request: Request, exc: Exception):
             "success": False,
             "error": {
                 "code": 500,
-                "message": "Error interno del servidor",
+                "message": ERROR_MESSAGES["GENERIC"],
                 "path": str(request.url.path)
             },
             "timestamp": time.time()
