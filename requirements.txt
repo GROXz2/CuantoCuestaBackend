@@ -33,6 +33,7 @@ openai==1.11.1  # ✅ agregado para GPT
 
 # Logging y monitoreo
 structlog==23.2.0
+prometheus-fastapi-instrumentator==6.0.0
 
 # Testing
 pytest==7.4.3

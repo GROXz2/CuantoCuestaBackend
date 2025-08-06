@@ -1,17 +1,17 @@
-"""
-Aplicación principal FastAPI para Cuanto Cuesta
-"""
-import time
+"""Aplicación principal FastAPI para Cuanto Cuesta"""
 import logging
 import sys
 import uuid
+import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
-import uvicorn
+
 import structlog
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
@@ -23,12 +23,17 @@ from redis import asyncio as aioredis
 from fastapi_limiter import FastAPILimiter
 
 from app.core.config import settings
-from app.core.database import check_database_connection, create_database
-from app.core.cache import cache
 from app.api.v1.api import api_router
+from app.api.v1.routers.health import router as health_router
+
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+except ImportError:
+    Instrumentator = None
+
 import routers.gpt_router
 
-# Configurar logging estructurado
+# Configurar structlog
 log_level_name = "DEBUG" if settings.DEBUG else settings.LOG_LEVEL
 log_level = getattr(logging, log_level_name.upper(), logging.INFO)
 logging.basicConfig(level=log_level, format="%(message)s", stream=sys.stdout)
@@ -48,86 +53,30 @@ structlog.configure(
 
 logger = structlog.get_logger(__name__)
 
-# Variable global para tiempo de inicio
-start_time = time.time()
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
     logger.info("Iniciando aplicación Cuanto Cuesta...")
-
-    redis = aioredis.from_url(
-        settings.REDIS_URL, encoding="utf-8", decode_responses=True
-    )
+    # Inicializar Redis + rate limiter
+    redis = aioredis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
     await FastAPILimiter.init(redis)
-
-    # Verificar conexión a base de datos (desactivado temporalmente)
-    # if not await verify_database_connection():
-    #     logger.error("No se pudo conectar a la base de datos")
-    #     raise Exception("Error de conexión a base de datos")
-
     yield
-
-    # Shutdown
     await redis.close()
     logger.info("Cerrando aplicación...")
 
-
-# Crear aplicación FastAPI
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
     description="""
     API REST para comparación de precios de supermercados chilenos.
-    
-    ## Características principales
-    
-    * **Búsqueda inteligente** de productos con manejo de caracteres especiales
-    * **Comparación de precios** en tiempo real entre diferentes tiendas
-    * **Búsqueda geográfica** con cálculo preciso de distancias
-    * **Manejo especial de caracteres chilenos** (ej: Ñuñoa, Peñalolén)
-    * **Optimización de listas de compra** con algoritmos de ahorro
-    * **API multi-plataforma** optimizada para GPT, Chrome Extension y App Móvil
-    
-    ## Funcionalidades especiales
-    
-    ### Manejo de caracteres especiales
-    La API maneja inteligentemente caracteres especiales chilenos:
-    - Buscar "Ñuñoa" funciona escribiendo "Nunoa", "nunoa", "NUNOA"
-    - Buscar "Peñalolén" funciona escribiendo "Penalolen"
-    - Normalización automática de acentos y tildes
-    
-    ### Búsqueda geográfica
-    - Cálculo preciso de distancias usando PostGIS
-    - Estimación de tiempos de viaje
-    - Filtrado por radio de búsqueda
-    - Ordenamiento por distancia o precio
-    
-    ### Optimización de compras
-    - Algoritmos de optimización precio vs distancia
-    - Sugerencias de rutas de compra
-    - Análisis de ahorro por tienda
-    - Recomendaciones inteligentes
-    
-    ## Endpoints principales
-    
-    * `/productos/buscar` - Búsqueda inteligente de productos
-    * `/precios/comparar/{producto_id}` - Comparación de precios
-    * `/tiendas/cercanas` - Tiendas cercanas con geolocalización
-    * `/tiendas/buscar-por-comuna` - Búsqueda por comuna con manejo de Ñ
-    
-    ## Autenticación
-    
-    Algunos endpoints requieren autenticación JWT (funcionalidad futura).
+    ... (tu descripción aquí) ...
     """,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
-# Configurar CORS
+# CORS y TrustedHosts
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS.split(","),
@@ -135,24 +84,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Middleware de hosts confiables
 if not settings.DEBUG:
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=settings.ALLOWED_HOSTS
-    )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
-
-# Middleware personalizado para logging y métricas
+# Middleware de logging y métricas
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Middleware para logging de requests con contexto"""
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
     user_id = request.headers.get("X-User-ID", "anonymous")
     bind_contextvars(request_id=request_id, user_id=user_id)
 
-    start_time_req = time.time()
+    start = time.time()
     logger.info("Request", method=request.method, url=str(request.url))
     try:
         response = await call_next(request)
@@ -161,230 +103,98 @@ async def log_requests(request: Request, call_next):
         clear_contextvars()
         raise
 
-    process_time = time.time() - start_time_req
-    logger.info(
-        "Response",
-        status_code=response.status_code,
-        process_time=round(process_time, 3),
-        path=request.url.path,
-    )
-    response.headers["X-Process-Time"] = str(process_time)
+    elapsed = round(time.time() - start, 3)
+    logger.info("Response", status_code=response.status_code, process_time=elapsed, path=request.url.path)
+    response.headers["X-Process-Time"] = str(elapsed)
     clear_contextvars()
     return response
 
-
-# Manejador de errores global
+# Exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Manejador personalizado de errores HTTP"""
     return JSONResponse(
         status_code=exc.status_code,
-        content={
-            "success": False,
-            "error": {
-                "code": exc.status_code,
-                "message": exc.detail,
-                "path": str(request.url.path)
-            },
-            "timestamp": time.time()
-        }
+        content={"success": False, "error": {"code": exc.status_code, "message": exc.detail, "path": str(request.url.path)}, "timestamp": time.time()},
     )
-
 
 @app.exception_handler(OpenAIError)
 async def openai_exception_handler(request: Request, exc: OpenAIError):
-    """Manejo de errores del cliente de OpenAI"""
     logger.exception("Error en OpenAI")
     return JSONResponse(
         status_code=500,
-        content={
-            "success": False,
-            "error": {
-                "code": 500,
-                "message": "Error en servicio OpenAI",
-                "path": str(request.url.path),
-            },
-            "timestamp": time.time(),
-        },
+        content={"success": False, "error": {"code": 500, "message": "Error en servicio OpenAI", "path": str(request.url.path)}, "timestamp": time.time()},
     )
-
 
 @app.exception_handler(RedisError)
 async def redis_exception_handler(request: Request, exc: RedisError):
-    """Manejo de errores de Redis"""
     logger.exception("Error en Redis")
     return JSONResponse(
         status_code=500,
-        content={
-            "success": False,
-            "error": {
-                "code": 500,
-                "message": "Error en servicio Redis",
-                "path": str(request.url.path),
-            },
-            "timestamp": time.time(),
-        },
+        content={"success": False, "error": {"code": 500, "message": "Error en servicio Redis", "path": str(request.url.path)}, "timestamp": time.time()},
     )
-
 
 @app.exception_handler(SQLAlchemyError)
 async def db_exception_handler(request: Request, exc: SQLAlchemyError):
-    """Manejo de errores de base de datos"""
     logger.exception("Error en base de datos")
     return JSONResponse(
         status_code=500,
-        content={
-            "success": False,
-            "error": {
-                "code": 500,
-                "message": "Error en base de datos",
-                "path": str(request.url.path),
-            },
-            "timestamp": time.time(),
-        },
+        content={"success": False, "error": {"code": 500, "message": "Error en base de datos", "path": str(request.url.path)}, "timestamp": time.time()},
     )
-
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Manejador de errores generales"""
     logger.exception("Error no manejado")
-
     return JSONResponse(
         status_code=500,
-        content={
-            "success": False,
-            "error": {
-                "code": 500,
-                "message": "Error interno del servidor",
-                "path": str(request.url.path),
-            },
-            "timestamp": time.time(),
-        },
+        content={"success": False, "error": {"code": 500, "message": "Error interno del servidor", "path": str(request.url.path)}, "timestamp": time.time()},
     )
 
-
-# Endpoint de health check
-@app.get("/health", tags=["Health"])
-async def health_check():
-    """
-    Health check endpoint para monitoreo
-    """
-    # Verificar base de datos
-    db_status = "ok" if check_database_connection() else "error"
-    
-    # Verificar cache
-    cache_status = "ok"
-    try:
-        if cache.redis_client:
-            cache.redis_client.ping()
-    except:
-        cache_status = "error"
-    
-    # Calcular uptime
-    uptime = time.time() - start_time
-    
-    return {
-        "status": "ok" if db_status == "ok" else "degraded",
-        "version": settings.PROJECT_VERSION,
-        "timestamp": time.time(),
-        "database": db_status,
-        "cache": cache_status,
-        "uptime_seconds": round(uptime, 2),
-        "environment": "development" if settings.DEBUG else "production"
-    }
-
-
-# Incluir routers de la API
+# Routers
+app.include_router(health_router)
 app.include_router(api_router, prefix=settings.API_V1_STR)
 app.include_router(routers.gpt_router.router)
 
+# Prometheus metrics
+if Instrumentator:
+    Instrumentator().instrument(app).expose(app)
 
-# Personalizar OpenAPI schema
+# OpenAPI custom
 def custom_openapi():
-    """Personalizar documentación OpenAPI"""
     if app.openapi_schema:
         return app.openapi_schema
-    
-    openapi_schema = get_openapi(
-        title=settings.PROJECT_NAME,
-        version=settings.PROJECT_VERSION,
-        description=app.description,
-        routes=app.routes,
-    )
-
-    base_url = settings.BASE_URL or "https://cuantocuestabackend.onrender.com"
-    openapi_schema["servers"] = [{"url": base_url}]
-    
-    # Personalizar información adicional
-    openapi_schema["info"]["x-logo"] = {
-        "url": "https://cuantocuesta.cl/logo.png"
-    }
-    
-    # Agregar información de contacto
-    openapi_schema["info"]["contact"] = {
-        "name": "Equipo Cuanto Cuesta",
-        "email": "api@cuantocuesta.cl",
-        "url": "https://cuantocuesta.cl"
-    }
-    
-    # Agregar información de licencia
-    openapi_schema["info"]["license"] = {
-        "name": "MIT",
-        "url": "https://opensource.org/licenses/MIT"
-    }
-    
-    # Agregar tags personalizados
-    openapi_schema["tags"] = [
-        {
-            "name": "Productos",
-            "description": "Búsqueda y gestión de productos"
-        },
-        {
-            "name": "Precios", 
-            "description": "Comparación y análisis de precios"
-        },
-        {
-            "name": "Tiendas",
-            "description": "Búsqueda geográfica de tiendas"
-        },
-        {
-            "name": "Health",
-            "description": "Monitoreo y estado del sistema"
-        }
+    schema = get_openapi(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION, description=app.description, routes=app.routes)
+    base = settings.BASE_URL or "https://cuantocuestabackend.onrender.com"
+    schema["servers"] = [{"url": base}]
+    schema["info"].update({
+        "x-logo": {"url": "https://cuantocuesta.cl/logo.png"},
+        "contact": {"name": "Equipo Cuanto Cuesta", "email": "api@cuantocuesta.cl", "url": "https://cuantocuesta.cl"},
+        "license": {"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
+    })
+    schema["tags"] = [
+        {"name": "Productos", "description": "Búsqueda y gestión de productos"},
+        {"name": "Precios", "description": "Comparación y análisis de precios"},
+        {"name": "Tiendas", "description": "Búsqueda geográfica de tiendas"},
+        {"name": "Health", "description": "Monitoreo y estado del sistema"},
     ]
-    
-    app.openapi_schema = openapi_schema
-    return app.openapi_schema
-
+    app.openapi_schema = schema
+    return schema
 
 app.openapi = custom_openapi
 
-
-# Endpoint raíz
+# Root endpoint
 @app.get("/", tags=["Root"])
 async def root():
-    """
-    Endpoint raíz con información de la API
-    """
     return {
         "message": "¡Bienvenido a Cuanto Cuesta API!",
-        "description": "API para comparación de precios de supermercados chilenos",
         "version": settings.PROJECT_VERSION,
-        "docs_url": "/docs",
-        "redoc_url": "/redoc",
         "health_url": "/health",
-        "api_base": settings.API_V1_STR,
+        "docs_url": "/docs",
         "features": [
-            "Búsqueda inteligente de productos",
-            "Comparación de precios en tiempo real", 
-            "Búsqueda geográfica con PostGIS",
-            "Manejo de caracteres especiales (Ñ, acentos)",
-            "Optimización de listas de compra",
-            "API multi-plataforma"
-        ]
+            "Búsqueda inteligente", "Comparación en tiempo real",
+            "Geolocalización con PostGIS", "Manejo de caracteres especiales",
+            "Optimización de listas", "API multi-plataforma"
+        ],
     }
-
 
 if __name__ == "__main__":
     uvicorn.run(
@@ -392,6 +202,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL.lower()
+        log_level=settings.LOG_LEVEL.lower(),
     )
 
