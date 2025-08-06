@@ -1,5 +1,6 @@
 # backend/routers/gpt_router.py
 
+import json
 import logging
 from typing import List, Optional
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field, constr, StrictFloat
 from auth import verify_gpt_token
 from app.main import ERROR_MESSAGES
 from app.utils.sanitizer import sanitize_text
+from openai_client import consulta_gpt
 
 router = APIRouter(prefix="/api", tags=["gpt"])
 
@@ -50,6 +52,8 @@ async def search_products(
         c = _sanitize_and_validate(category) if category else None
 
         products = await search_products_in_db(q, c)
+        if not products:
+            products = await search_products_with_gpt(q, c)
         return {
             "success": True,
             "data": products,
@@ -110,6 +114,26 @@ async def search_products_in_db(query: str, category: Optional[str] = None):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error buscando productos: {e}")
+
+
+async def search_products_with_gpt(query: str, category: Optional[str] = None) -> List[dict]:
+    """Busca productos en supermercados chilenos usando GPT como fuente externa."""
+    prompt = (
+        "Eres un asistente que obtiene precios actuales en supermercados de Chile.\n"
+        f"Producto: {query}\n"
+        f"Categoria: {category or 'N/A'}\n"
+        "Responde solamente con un JSON en formato \n"
+        "[{\"nombre\":\"string\",\"precio\":number,\"tienda\":\"string\"}]"
+    )
+    try:
+        respuesta = await consulta_gpt(prompt)
+        data = json.loads(respuesta)
+        if isinstance(data, list):
+            return data
+        logger.warning("Formato inesperado de GPT: %s", respuesta)
+    except Exception as e:
+        logger.error("Error al consultar GPT: %s", e)
+    return []
 
 
 async def optimize_purchases(products: List[str], location: Optional[dict] = None):
