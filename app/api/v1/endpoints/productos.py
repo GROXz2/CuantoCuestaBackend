@@ -36,7 +36,9 @@ router = APIRouter()
     error_message="Demasiadas solicitudes, intenta nuevamente más tarde."
 )
 async def buscar_productos(
-    q: str = Query(..., min_length=1, max_length=100, description="Término de búsqueda"),
+    q: str = Query(
+        ..., min_length=1, max_length=100, pattern=r"^[\w\s-]+$", description="Término de búsqueda"
+    ),
     categoria_id: Optional[UUID] = Query(None, description="ID de categoría para filtrar"),
     precio_min: Optional[float] = Query(None, ge=0, description="Precio mínimo"),
     precio_max: Optional[float] = Query(None, ge=0, description="Precio máximo"),

@@ -30,7 +30,9 @@ router = APIRouter()
     }
 )
 async def buscar_tiendas_por_comuna(
-    termino: str = Query(..., min_length=1, max_length=100, description="Término de búsqueda (comuna)"),
+    termino: str = Query(
+        ..., min_length=1, max_length=100, pattern=r"^[\w\s-]+$", description="Término de búsqueda (comuna)"
+    ),
     limite: int = Query(50, ge=1, le=100, description="Número máximo de resultados"),
     db: Session = Depends(get_db)
 ):

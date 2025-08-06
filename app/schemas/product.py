@@ -2,7 +2,7 @@
 Schemas para productos con nomenclatura en español
 """
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictStr
 from uuid import UUID
 
 from app.schemas.common import CategoryInfo, PriceInfo, Config
@@ -10,7 +10,9 @@ from app.schemas.common import CategoryInfo, PriceInfo, Config
 
 class ProductSearchRequest(BaseModel):
     """Request para búsqueda de productos"""
-    q: str = Field(..., min_length=1, max_length=100, description="Término de búsqueda")
+    q: StrictStr = Field(
+        ..., min_length=1, max_length=100, pattern=r"^[\w\s-]+$", description="Término de búsqueda"
+    )
     categoria_id: Optional[UUID] = Field(None, description="ID de categoría para filtrar")
     precio_min: Optional[float] = Field(None, ge=0, description="Precio mínimo")
     precio_max: Optional[float] = Field(None, ge=0, description="Precio máximo")
@@ -153,7 +155,9 @@ class ProductDiscountsResponse(BaseModel):
 
 class ProductBarcodeRequest(BaseModel):
     """Request para búsqueda por código de barras"""
-    codigo_barras: str = Field(..., min_length=8, max_length=20, description="Código de barras del producto")
+    codigo_barras: StrictStr = Field(
+        ..., min_length=8, max_length=20, pattern=r"^[0-9]+$", description="Código de barras del producto"
+    )
     
     class Config(Config):
         schema_extra = {

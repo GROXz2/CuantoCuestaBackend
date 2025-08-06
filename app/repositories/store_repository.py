@@ -10,6 +10,7 @@ from geoalchemy2.functions import ST_DWithin, ST_Distance, ST_GeogFromText
 from app.models.store import Store
 from app.models.supermarket import Supermarket
 from app.repositories.base_repository import BaseRepository
+from app.utils.sanitizer import sanitize_text
 
 
 class StoreRepository(BaseRepository[Store, dict, dict]):
@@ -28,6 +29,9 @@ class StoreRepository(BaseRepository[Store, dict, dict]):
         Búsqueda inteligente de tiendas por comuna con manejo de caracteres especiales
         Encuentra "Ñuñoa" con cualquier variación: "Nunoa", "nunoa", "NUNOA"
         """
+        search_term = sanitize_text(search_term)
+        if not search_term:
+            raise ValueError("search_term")
         query = text("""
             SELECT 
                 s.id,
