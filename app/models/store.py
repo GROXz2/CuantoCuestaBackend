@@ -1,7 +1,7 @@
 """
 Modelo de tiendas
 """
-from sqlalchemy import Column, String, Text, Boolean, ForeignKey, DateTime, Computed
+from sqlalchemy import Column, String, Text, Boolean, ForeignKey, DateTime, Computed, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -15,9 +15,12 @@ from app.core.database import Base
 
 class Store(Base):
     """Modelo de tienda física"""
-    
+
     __tablename__ = "stores"
-    __table_args__ = {"schema": "stores"}
+    __table_args__ = (
+        Index("ix_stores_location", "location", postgresql_using="gist"),
+        {"schema": "stores"},
+    )
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     supermarket_id = Column(UUID(as_uuid=True), ForeignKey("stores.supermarkets.id"), nullable=False)

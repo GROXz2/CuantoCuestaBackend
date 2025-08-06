@@ -1,7 +1,7 @@
 """
 Modelo de productos
 """
-from sqlalchemy import Column, String, Text, Boolean, ForeignKey, DateTime, Computed
+from sqlalchemy import Column, String, Text, Boolean, ForeignKey, DateTime, Computed, Index
 from sqlalchemy.dialects.postgresql import UUID, TSVECTOR
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -12,14 +12,17 @@ from app.core.database import Base
 
 class Product(Base):
     """Modelo de producto"""
-    
+
     __tablename__ = "products"
-    __table_args__ = {"schema": "products"}
+    __table_args__ = (
+        Index("ix_products_search_vector", "search_vector", postgresql_using="gin"),
+        {"schema": "products"},
+    )
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False, index=True)
     brand = Column(String(100), index=True)
-    category_id = Column(UUID(as_uuid=True), ForeignKey("products.categories.id"), nullable=False)
+    category_id = Column(UUID(as_uuid=True), ForeignKey("products.categories.id"), nullable=False, index=True)
     barcode = Column(String(50), unique=True, index=True)
     description = Column(Text)
     unit_type = Column(String(20), default="unidad")  # unidad, kg, litro, etc.
