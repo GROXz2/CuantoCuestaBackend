@@ -178,8 +178,42 @@ class ProductService:
         
         # Guardar en cache
         self.cache.set(cache_key, result, settings.CACHE_TTL_PRODUCTS)
-        
+
         return result
+
+    async def search_products_async(
+        self,
+        db,
+        search_term: str,
+        category_id: Optional[UUID] = None,
+        precio_min: Optional[float] = None,
+        precio_max: Optional[float] = None,
+        lat: Optional[float] = None,
+        lon: Optional[float] = None,
+        radio_km: float = 10.0,
+        limite: int = 50,
+        skip: int = 0,
+    ) -> Dict[str, Any]:
+        """Async wrapper for search_products using AsyncSession."""
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        async_session: AsyncSession = db
+
+        def sync_call(session):
+            return self.search_products(
+                session,
+                search_term=search_term,
+                category_id=category_id,
+                precio_min=precio_min,
+                precio_max=precio_max,
+                lat=lat,
+                lon=lon,
+                radio_km=radio_km,
+                limite=limite,
+                skip=skip,
+            )
+
+        return await async_session.run_sync(sync_call)
     
     def get_product_by_id(
         self,

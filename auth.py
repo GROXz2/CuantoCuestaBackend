@@ -10,7 +10,6 @@ from fastapi.security import (
     OAuth2PasswordBearer,
 )
 
-from app.main import ERROR_MESSAGES
 
 
 # Token de acceso utilizado por el GPT
@@ -24,6 +23,8 @@ async def verify_gpt_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """Verifica que el request provenga del GPT autorizado."""
+    from app.main import ERROR_MESSAGES
+
     if credentials.credentials != API_TOKEN:
         raise HTTPException(status_code=401, detail=ERROR_MESSAGES["INVALID_TOKEN"])
     return credentials.credentials
