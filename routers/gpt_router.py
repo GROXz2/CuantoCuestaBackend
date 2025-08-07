@@ -83,7 +83,8 @@ async def optimize_shopping_list(
     """Endpoint para optimizar lista de compras (requiere token)."""
     try:
         sanitized_products = [_sanitize_and_validate(p) for p in request.products]
-        optimization = await optimize_purchases(sanitized_products, request.location)
+        product_data = await fetch_products_with_fallback(sanitized_products)
+        optimization = await optimize_purchases(product_data, request.location)
         return {
             "success": True,
             "data": optimization,
@@ -158,7 +159,31 @@ async def search_products_with_gpt(
     return []
 
 
-async def optimize_purchases(products: List[str], location: Optional[dict] = None):
+async def fetch_products_with_fallback(products: List[str]) -> List[dict]:
+    """Obtiene información estructurada de productos manteniendo su orden.
+
+    Para cada producto se busca primero en la base de datos y, si no se
+    encuentra, se consulta a GPT. Siempre se retorna un elemento por cada
+    producto solicitado para mantener el orden original de la lista.
+    """
+
+    results: List[dict] = []
+    for product in products:
+        db_results = await search_products_in_db(product)
+        if db_results:
+            results.append(db_results[0])
+            continue
+
+        gpt_results = await search_products_with_gpt(product)
+        if gpt_results:
+            results.append(gpt_results[0])
+        else:
+            # Mantener el lugar con datos mínimos si no hay resultados
+            results.append({"nombre": product})
+    return results
+
+
+async def optimize_purchases(products: List[dict], location: Optional[dict] = None):
     """Optimize a shopping list using the optimization service."""
     try:
         from app.services.optimization_service import OptimizationService
