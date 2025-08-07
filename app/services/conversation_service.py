@@ -605,6 +605,16 @@ class ConversationService:
                 "weight": 0.20,
                 "stability_threshold": 0.75,
                 "decay_rate": 0.03
+            },
+            "allergies": {
+                "weight": 0.15,
+                "stability_threshold": 0.9,
+                "decay_rate": 0.01
+            },
+            "dietary_restrictions": {
+                "weight": 0.15,
+                "stability_threshold": 0.9,
+                "decay_rate": 0.01
             }
         }
         
@@ -1505,20 +1515,26 @@ class ConversationService:
     def _extract_preference_profile(self, anchors: Dict[str, ContextualAnchor]) -> Dict[str, Any]:
         """Extrae perfil de preferencias del usuario"""
         pref_anchor = anchors.get("preferencias_precio")
-        
-        if pref_anchor and pref_anchor.current_value and pref_anchor.confidence > 0.3:
-            prefs = pref_anchor.current_value
-            return {
-                "optimization_priority": prefs.get("prioridad", "equilibrio"),
-                "satisfaction_level": prefs.get("satisfaccion_promedio", 3.0),
-                "confidence": pref_anchor.confidence
-            }
-        
-        return {
+        allergy_anchor = anchors.get("allergies")
+        dietary_anchor = anchors.get("dietary_restrictions")
+
+        prefs = {
             "optimization_priority": "equilibrio",
             "satisfaction_level": 3.0,
-            "confidence": 0.0
+            "allergies": allergy_anchor.current_value if allergy_anchor and allergy_anchor.current_value else [],
+            "dietary_restrictions": dietary_anchor.current_value if dietary_anchor and dietary_anchor.current_value else [],
+            "confidence": 0.0,
         }
+
+        if pref_anchor and pref_anchor.current_value and pref_anchor.confidence > 0.3:
+            pref_values = pref_anchor.current_value
+            prefs.update({
+                "optimization_priority": pref_values.get("prioridad", "equilibrio"),
+                "satisfaction_level": pref_values.get("satisfaccion_promedio", 3.0),
+                "confidence": pref_anchor.confidence,
+            })
+
+        return prefs
     
     def _extract_behavioral_patterns(self, anchors: Dict[str, ContextualAnchor]) -> Dict[str, Any]:
         """Extrae patrones de comportamiento del usuario"""
