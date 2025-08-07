@@ -8,7 +8,6 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field, constr, StrictFloat
 
 from auth import verify_gpt_token
-from app.main import ERROR_MESSAGES
 from app.utils.sanitizer import sanitize_text
 from openai_client import consulta_gpt
 
@@ -63,6 +62,8 @@ async def search_products(
         # pasa 422 de sanitización o errores controlados
         raise he
     except Exception:
+        from app.main import ERROR_MESSAGES
+
         logger.exception("Error en search_products")
         raise HTTPException(status_code=500, detail=ERROR_MESSAGES["PRODUCT_SEARCH_ERROR"])
 
@@ -84,6 +85,8 @@ async def optimize_shopping_list(
     except HTTPException as he:
         raise he
     except Exception:
+        from app.main import ERROR_MESSAGES
+
         logger.exception("Error en optimize_shopping_list")
         raise HTTPException(status_code=500, detail=ERROR_MESSAGES["OPTIMIZE_ERROR"])
 
@@ -92,13 +95,12 @@ async def search_products_in_db(query: str, category: Optional[str] = None):
     """Search products using the product service."""
     try:
         from uuid import UUID
-        from db import SessionLocal
+        from db import AsyncSessionLocal
         from app.services.product_service import product_service
 
-        db = SessionLocal()
-        try:
+        async with AsyncSessionLocal() as db:
             category_id = UUID(category) if category else None
-            result = product_service.search_products(
+            result = await product_service.search_products_async(
                 db=db,
                 search_term=query,
                 category_id=category_id,
@@ -106,8 +108,6 @@ async def search_products_in_db(query: str, category: Optional[str] = None):
                 skip=0,
             )
             return result.get("productos", [])
-        finally:
-            db.close()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
