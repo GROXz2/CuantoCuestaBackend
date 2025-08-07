@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, constr, StrictFloat
 from auth import verify_gpt_token
 from app.utils.sanitizer import sanitize_text
 from openai_client import consulta_gpt
+from app.services.conversation_service import ConversationService
 
 router = APIRouter(prefix="/api", tags=["gpt"])
 
@@ -43,6 +44,7 @@ class OptimizeRequest(BaseModel):
 async def search_products(
     query: str,
     category: Optional[str] = None,
+    user_id: Optional[str] = None,
     token: str = Depends(verify_gpt_token),
 ):
     """Endpoint específico para que GPT busque productos (requiere token)."""
@@ -50,9 +52,14 @@ async def search_products(
         q = _sanitize_and_validate(query)
         c = _sanitize_and_validate(category) if category else None
 
+        context = None
+        if user_id:
+            service = ConversationService()
+            context = await service.get_user_context_summary(user_id)
+
         products = await search_products_in_db(q, c)
         if not products:
-            products = await search_products_with_gpt(q, c)
+            products = await search_products_with_gpt(q, c, context)
         return {
             "success": True,
             "data": products,
@@ -116,12 +123,27 @@ async def search_products_in_db(query: str, category: Optional[str] = None):
         raise HTTPException(status_code=500, detail=f"Error buscando productos: {e}")
 
 
-async def search_products_with_gpt(query: str, category: Optional[str] = None) -> List[dict]:
+async def search_products_with_gpt(
+    query: str, category: Optional[str] = None, user_context: Optional[dict] = None
+) -> List[dict]:
     """Busca productos en supermercados chilenos usando GPT como fuente externa."""
+    context_prompt = ""
+    if user_context and user_context.get("context_summary"):
+        profile = user_context["context_summary"].get("preference_profile", {})
+        allergies = profile.get("allergies") or []
+        dietary = profile.get("dietary_restrictions") or []
+        if allergies or dietary:
+            context_prompt = "Ten en cuenta las siguientes restricciones del usuario:\n"
+            if allergies:
+                context_prompt += f"Alergias: {', '.join(allergies)}\n"
+            if dietary:
+                context_prompt += f"Restricciones dietarias: {', '.join(dietary)}\n"
+
     prompt = (
         "Eres un asistente que obtiene precios actuales en supermercados de Chile.\n"
         f"Producto: {query}\n"
         f"Categoria: {category or 'N/A'}\n"
+        f"{context_prompt}"
         "Responde solamente con un JSON en formato \n"
         "[{\"nombre\":\"string\",\"precio\":number,\"tienda\":\"string\"}]"
     )
