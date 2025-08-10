@@ -23,7 +23,7 @@ class ProductSearchRequest(BaseModel):
     skip: int = Field(0, ge=0, description="Número de resultados a omitir")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "q": "pan integral",
                 "categoria_id": None,
@@ -65,7 +65,7 @@ class ProductResponse(BaseModel):
     )
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174000",
                 "nombre": "Pan Integral",
@@ -112,7 +112,7 @@ class ProductSearchResponse(BaseModel):
     tiempo_respuesta_ms: Optional[int] = Field(None, description="Tiempo de respuesta en milisegundos")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "productos": [
                     {
@@ -160,7 +160,7 @@ class ProductBarcodeRequest(BaseModel):
     )
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "codigo_barras": "7802900123456"
             }

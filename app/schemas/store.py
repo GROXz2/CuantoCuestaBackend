@@ -16,7 +16,7 @@ class StoreSearchRequest(BaseModel):
     limite: int = Field(50, ge=1, le=100, description="Número máximo de resultados")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "termino": "Ñuñoa",
                 "limite": 20
@@ -35,7 +35,7 @@ class NearbyStoresRequest(BaseModel):
     limite: int = Field(50, ge=1, le=100, description="Número máximo de resultados")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "lat": -33.4489,
                 "lon": -70.6693,
@@ -69,7 +69,7 @@ class StoreResponse(BaseModel):
     puntuacion_similitud: Optional[float] = Field(None, description="Puntuación de similitud en búsqueda")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174000",
                 "nombre": "Jumbo Ñuñoa",
@@ -121,7 +121,7 @@ class StoreSearchResponse(BaseModel):
     tiempo_respuesta_ms: Optional[int] = Field(None, description="Tiempo de respuesta en milisegundos")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "tiendas": [
                     {
@@ -147,7 +147,7 @@ class NearbyStoresResponse(BaseModel):
     filtros_aplicados: Dict[str, Any] = Field(..., description="Filtros aplicados")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "tiendas": [
                     {
@@ -174,7 +174,7 @@ class StoreServicesRequest(BaseModel):
     limite: int = Field(50, ge=1, le=100, description="Número máximo de resultados")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "servicios": ["farmacia", "panaderia"],
                 "lat": -33.4489,

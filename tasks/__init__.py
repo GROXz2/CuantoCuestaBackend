@@ -1,15 +1,20 @@
 """Inicializa la cola de tareas RQ.
 
-Si RQ no está disponible (por ejemplo durante las pruebas sin dependencias),
+Si RQ no está disponible o no hay REDIS_URL configurada,
 se utiliza un stub que ejecuta las tareas de forma síncrona.
 """
-from redis import Redis
+from redis import asyncio as aioredis
+
+from app.core.config import settings
 
 try:  # pragma: no cover - simple fallback
     from rq import Queue  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover
+    Queue = None  # type: ignore
+
+if not settings.REDIS_URL or Queue is None:
     class Queue:  # type: ignore
-        """Implementación mínima para entornos sin RQ instalado."""
+        """Implementación mínima para entornos sin RQ o Redis."""
 
         def __init__(self, *args, **kwargs):
             pass
@@ -23,9 +28,12 @@ except ModuleNotFoundError:  # pragma: no cover
 
             return _Job()
 
-from app.core.config import settings
+    redis_conn = None
+else:  # pragma: no cover - requiere RQ y Redis reales
+    redis_conn = aioredis.from_url(
+        settings.REDIS_URL, encoding="utf-8", decode_responses=True
+    )
 
-redis_conn = Redis.from_url(settings.REDIS_URL)
 # Cola por defecto para tareas en segundo plano
 background_queue: Queue = Queue("default", connection=redis_conn)
 
