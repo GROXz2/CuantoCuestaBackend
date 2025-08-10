@@ -68,12 +68,30 @@ ERROR_MESSAGES = {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Iniciando aplicación Cuanto Cuesta...")
-    redis = aioredis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+
+    redis_url = settings.REDIS_URL
+    safe_url = redis_url.split("@")[-1] if redis_url else ""
+    if not redis_url or ("localhost" in redis_url and not settings.DEBUG):
+        logger.error("REDIS_URL inválida", redis_url=safe_url)
+        raise RuntimeError("Invalid REDIS_URL")
+
+    redis = aioredis.from_url(redis_url, encoding="utf-8", decode_responses=True)
+    try:
+        await redis.ping()
+    except Exception as exc:  # pragma: no cover - network failure
+        logger.error("No se pudo conectar a Redis", redis_url=safe_url, error=str(exc))
+        raise RuntimeError("Redis ping failed") from exc
+
+    app.state.redis = redis
     if FastAPILimiter:
-        await FastAPILimiter.init(redis)
-    yield
-    await redis.close()
-    logger.info("Cerrando aplicación...")
+        # Initialize limiter with shared Redis client
+        await FastAPILimiter.init(app.state.redis)
+
+    try:
+        yield
+    finally:
+        await redis.close()
+        logger.info("Cerrando aplicación...")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

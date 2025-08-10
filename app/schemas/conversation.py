@@ -45,7 +45,7 @@ class ConversationRequest(BaseModel):
         return v
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "user_id": "temp_user_abc123",
                 "interaction_data": {
@@ -85,7 +85,7 @@ class UserProfileRequest(BaseModel):
     )
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "user_id": "temp_user_abc123",
                 "profile_data": {

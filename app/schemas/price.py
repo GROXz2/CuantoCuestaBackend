@@ -21,7 +21,7 @@ class PriceComparisonRequest(BaseModel):
     incluir_mayoristas: bool = Field(False, description="Incluir supermercados mayoristas")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "producto_id": "123e4567-e89b-12d3-a456-426614174000",
                 "lat": -33.4489,
@@ -53,7 +53,7 @@ class PriceDetailResponse(BaseModel):
     tiempo_estimado_min: Optional[int] = Field(None, description="Tiempo estimado en minutos")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "tienda_id": "123e4567-e89b-12d3-a456-426614174000",
                 "supermercado": "Jumbo",
@@ -86,7 +86,7 @@ class PriceComparisonResponse(BaseModel):
     )
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "producto": {
                     "id": "123e4567-e89b-12d3-a456-426614174000",
@@ -117,7 +117,7 @@ class BestDealsRequest(BaseModel):
     limite: int = Field(50, ge=1, le=100, description="Número máximo de ofertas")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "min_descuento": 25.0,
                 "lat": -33.4489,
@@ -163,7 +163,7 @@ class PriceHistoryRequest(BaseModel):
     dias: int = Field(30, ge=1, le=365, description="Número de días de historial")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "producto_id": "123e4567-e89b-12d3-a456-426614174000",
                 "tienda_id": "456e7890-e89b-12d3-a456-426614174000",
@@ -221,7 +221,7 @@ class PriceAlertRequest(BaseModel):
     activa: bool = Field(True, description="Si la alerta está activa")
     
     class Config(Config):
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "producto_id": "123e4567-e89b-12d3-a456-426614174000",
                 "precio_objetivo": 800,

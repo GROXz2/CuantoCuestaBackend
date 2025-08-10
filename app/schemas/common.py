@@ -34,7 +34,7 @@ class LocationParams(BaseModel):
     lon: float = Field(..., ge=-180, le=180, description="Longitud")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "lat": -33.4489,
                 "lon": -70.6693
@@ -147,7 +147,7 @@ class Config:
     """Configuración base para schemas"""
     use_enum_values = True
     validate_assignment = True
-    allow_population_by_field_name = True
+    populate_by_name = True
     json_encoders = {
         datetime: lambda v: v.isoformat(),
         Decimal: lambda v: float(v),

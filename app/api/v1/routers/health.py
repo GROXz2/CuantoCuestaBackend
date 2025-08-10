@@ -21,9 +21,7 @@ async def check_redis(timeout: float = 1.0) -> bool:
     if not cache.redis_client:
         return False
     try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(cache.redis_client.ping), timeout
-        )
+        return await asyncio.wait_for(cache.redis_client.ping(), timeout)
     except Exception:
         return False
 

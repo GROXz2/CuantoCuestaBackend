@@ -31,6 +31,7 @@ def compile_geography(element, compiler, **kw):
 # Agregar el directorio raíz al path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import app.main as app_main
 from app.main import app
 from app.core.database import get_db, Base
 from app.core.config import settings
@@ -75,8 +76,21 @@ def test_app():
 
 
 @pytest.fixture(scope="session")
-def client(test_app):
+def client(test_app, monkeypatch):
     """Fixture del cliente de test"""
+
+    class DummyRedis:
+        async def ping(self):
+            return True
+
+        async def close(self):
+            pass
+
+    async def dummy_from_url(*args, **kwargs):
+        return DummyRedis()
+
+    monkeypatch.setattr(app_main.aioredis, "from_url", dummy_from_url)
+
     with TestClient(test_app) as test_client:
         yield test_client
 
@@ -314,6 +328,7 @@ def pytest_configure(config):
     """Configuración de pytest"""
     # Configurar variables de entorno para tests
     os.environ["TESTING"] = "true"
+    os.environ["DEBUG"] = "true"
     os.environ["DATABASE_URL"] = TEST_DATABASE_URL
     os.environ["REDIS_URL"] = "redis://localhost:6379/1"  # DB diferente para tests
 
