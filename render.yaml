@@ -7,7 +7,7 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: REDIS_URL
-        value: redis://red-d2ckbaruibrs738j2qug:6379/0
+        value: "redis://red-d2ckbaruibrs738j2qug:6379/0"
     healthCheckPath: /health
     healthCheckTimeoutSeconds: 2
     alerts:
