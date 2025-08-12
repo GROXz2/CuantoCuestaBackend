@@ -30,12 +30,13 @@ async def consulta_gpt(prompt: str) -> str:
         return "OPENAI_API_KEY no configurada. No se pudo realizar la consulta."
 
     try:
-        response = await client.chat.completions.create(
+        response = await client.responses.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
+            input=prompt,
             temperature=0.7,
+            connectors=[{"id": "web-search"}],
         )
-        return response.choices[0].message.content.strip()
+        return response.output_text.strip()
     except AuthenticationError as exc:
         logger.error("Error de autenticación con OpenAI: %s", exc)
         return "Error de autenticación con OpenAI."
@@ -45,3 +46,6 @@ async def consulta_gpt(prompt: str) -> str:
     except OpenAIError as exc:
         logger.error("Error de OpenAI: %s", exc)
         return "Ocurrió un error al consultar el modelo."
+    except Exception as exc:
+        logger.error("Error al realizar la búsqueda web: %s", exc)
+        return "La búsqueda web falló o devolvió un formato inesperado."
