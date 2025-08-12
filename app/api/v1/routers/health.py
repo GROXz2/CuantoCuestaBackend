@@ -19,6 +19,8 @@ async def check_db(timeout: float = 1.0) -> bool:
 
 async def check_redis(timeout: float = 1.0) -> bool:
     if not cache.redis_client:
+        await cache._connect()
+    if not cache.redis_client:
         return False
     try:
         return await asyncio.wait_for(cache.redis_client.ping(), timeout)
