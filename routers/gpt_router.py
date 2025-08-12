@@ -45,7 +45,7 @@ async def search_products(
     query: str,
     category: Optional[str] = None,
     user_id: Optional[str] = None,
-    token: str = Depends(verify_gpt_token),
+    # token: str = Depends(verify_gpt_token),
 ):
     """Endpoint específico para que GPT busque productos (requiere token)."""
     try:
@@ -78,7 +78,7 @@ async def search_products(
 @router.post("/optimize")
 async def optimize_shopping_list(
     request: OptimizeRequest,
-    token: str = Depends(verify_gpt_token),
+    # token: str = Depends(verify_gpt_token),
 ):
     """Endpoint para optimizar lista de compras (requiere token)."""
     try:
